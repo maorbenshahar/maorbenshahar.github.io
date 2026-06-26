@@ -1,0 +1,258 @@
+---
+layout: post
+title: "A lean Lean introduction (DRAFT)"
+date: 2026-06-18
+summary: "Introduction to theorem proving in Lean."
+tags: "#lean #math"
+---
+The goal in this exposition is to show how theorems are proved in Lean.
+The primary focus is to construct some intuitive examples that illustrate this. Readers wanting to get just a taste can stop after first order logic and definitionally true theorems. 
+However, the infrastructure developed up to that point does not permit the construction of interesting mathematics. By way of three examples I introduce the three axioms Mathlib uses,
+soundness of quotients, extensionality for propositions, and the almighty axiom of choice. With these, Lean theorems have been built in diverse topics, from number theory to black holes. 
+
+
+<h2>Building blocks</h2>
+
+In Lean one can define dependent types. Types, on their own, are things you would see in any programming language, such as <code class="language-lean">String</code> or <code class="language-lean">Float</code>. Let us begin with a few simple examples, starting with a custom <code class="language-lean">Food</code> type,
+<pre><code class="language-lean">
+inductive Food where
+  | banana : Food
+  | apple : Food
+  | orange : Food
+  | sandwich : Food
+  | pizza : Food
+</code></pre>
+In regular math-lingo we might express this as "let banana, apple, orange, sandwich, and pizza be Food items". 
+The five entries are the type's <em>constructors</em>, we can use them to construct things which are of type Food,
+<pre><code class="language-lean">
+def myFavFruit : Food := Food.banana
+</code></pre>
+You can try any snippet in this post in your browser at <a href="https://live.lean-lang.org/">lean4web</a>, construct yourself an example food and then add a line <code class="language-lean">#check myFavFruit</code>. Hovering your mouse over the <code class="language-lean">#check</code> will display <code class="language-lean">myFavFruit : Food</code>, indicating that your fruit is of type <code class="language-lean">Food</code>. 
+
+So why do we use the word <code class="language-lean">inductive</code> to define a new type? 
+This is because a constructor, like <code class="language-lean">pizza</code> may take the type <em>itself</em> as an argument, so larger values are built out of smaller ones.
+However in the case above our constructors took no arguments, as you saw we just defined a food item by writing  <code class="language-lean">Food.banana</code>. So in this case, <code class="language-lean">Food</code> is rather uninteresting, it is just a flat list with no self-reference.
+To illustrate the inductive property let us define a new type, <code class="language-lean">Soup</code>
+<pre><code class="language-lean">
+inductive Soup where
+  | ingredient (f : Food) : Soup
+  | recycle (s : Soup) (f : Food) : Soup
+</code></pre>
+In plain words: "a soup is either <code class="language-lean">ingredient f</code> for some food <code class="language-lean">f</code>, or <code class="language-lean">recycle s f</code> built from a pre-existing soup <code class="language-lean">s</code> and one more food <code class="language-lean">f</code>". 
+Because <code class="language-lean">recycle</code> refers back to <code class="language-lean">Soup</code>, we can keep stacking soups out of smaller soups,
+<pre><code class="language-lean">
+def someFood : Food := Food.pizza
+def aTerribleSoup : Soup := Soup.ingredient someFood
+def aWorseSoup : Soup := Soup.recycle aTerribleSoup myFavFruit
+</code></pre>
+This we could say is soup(soup(pizza),banana), a pizza-banana soup. Not appetizing, and I am no big fan of soup so we will not pursue the soup type further. 
+<figure style="margin: 1em 0; text-align: center;">
+  <img src="soup.jpg" alt="A soup built from a smaller soup, built from a smaller soup">
+  <figcaption style="color: gray; font-style: italic;">The Fibonacci soup.</figcaption>
+</figure>
+<details class="aside">
+<summary>Aside: numbers come for free</summary>
+The same recursive shape gives the <em>natural numbers</em> &mdash; a number is either zero or the successor of another,
+<pre><code class="language-lean">
+inductive Nat where
+  | zero : Nat
+  | succ (n : Nat) : Nat
+</code></pre>
+So <code class="language-lean">3</code> is literally <code class="language-lean">succ 2</code>: a number just <em>is</em> &ldquo;one more than the one before.&rdquo; This is refreshingly free of the set-theoretic encoding, where <code class="language-lean">3</code> is the set <code class="language-lean">{0, 1, 2}</code> and meaningless questions &mdash; like whether <code class="language-lean">{{0}} ∈ 3</code> &mdash; become perfectly well-posed. The machinery that built our lunches is exactly the machinery of real mathematics.
+<details class="aside">
+<summary>&hellip;though type theory smuggles in its own junk</summary>
+Encodings still leave fingerprints. Because Lean represents a rational as a structure with internal fields, the very first entry in <a href="https://github.com/James-Hanson/junk-theorems-in-lean">junk-theorems-in-lean</a> proves that &ldquo;the third coordinate of <code class="language-lean">1/2</code> is a bijection&rdquo; &mdash; a vacuous truth about an implementation detail, not about the number one-half. Such <em>junk theorems</em> are artifacts of <em>how</em> we build objects; what equality and structure ought to mean, more carefully, is the subject of <a href="/posts/what-is-is.html">another post</a>.
+</details>
+</details>
+
+Our running example will be a lunch holding two foods,
+<pre><code class="language-lean">
+inductive Lunch where
+  | pack (a b : Food) : Lunch
+</code></pre>
+A <code class="language-lean">def</code> names a value or a function. To define a function we pattern match on how its input was built &mdash; here we take a lunch apart and put it back the other way round,
+<pre><code class="language-lean">
+def swap : Lunch → Lunch
+  | Lunch.pack a b => Lunch.pack b a
+</code></pre>
+
+<h2>True by definition</h2>
+
+Here is the aha. To <em>prove</em> a statement is to <em>construct</em> a term whose type is that statement &mdash; the exact thing <code class="language-lean">def</code> has been doing all along. A proof is a term; a theorem is a definition whose type happens to be a proposition. So we state and prove that swapping a concrete lunch gives what we expect with the very same <code class="language-lean">def</code> we used to build foods and soups,
+<pre><code class="language-lean">
+def swap_concrete :
+    swap (Lunch.pack Food.pizza Food.banana)
+  = Lunch.pack Food.banana Food.pizza := rfl
+</code></pre>
+The proof is <code class="language-lean">rfl</code> (<em>reflexivity</em>: everything equals itself), and it needs no axioms &mdash; it type-checks because both sides compute to the same lunch. Lean does offer a second keyword, <code class="language-lean">theorem</code>, for exactly this case &mdash; a definition whose type is a proposition &mdash; but it is the same act of construction. We use it from here on, remembering it is a <code class="language-lean">def</code> in disguise. So too is the fact that swapping <em>any</em> lunch twice returns the original &mdash; both sides reduce to the same lunch,
+<pre><code class="language-lean">
+theorem swap_invol (lb : Lunch) : swap (swap lb) = lb := rfl
+</code></pre>
+We can also prove pure logic this way. A statement lives in <code class="language-lean">Prop</code> (the type of propositions), and the arrow <code class="language-lean">→</code> that typed our functions doubles as &ldquo;implies&rdquo;; a proof is still just a term we assemble. A proof of <code class="language-lean">p ∧ q</code> is a pair, written <code class="language-lean">⟨_, _⟩</code>, with <code class="language-lean">.left</code> and <code class="language-lean">.right</code> to read the two halves back out. Swapping an <em>and</em> is just rebuilding the pair the other way round,
+<pre><code class="language-lean">
+theorem and_swap (p q : Prop) : p ∧ q → q ∧ p :=
+  fun h => ⟨h.right, h.left⟩
+</code></pre>
+A proof of <code class="language-lean">p ∨ q</code> is one side or the other, built with <code class="language-lean">Or.inl</code> (left) or <code class="language-lean">Or.inr</code> (right); to <em>use</em> one we handle both cases with <code class="language-lean">.elim</code>. Swapping an <em>or</em> sends each side to the opposite constructor,
+<pre><code class="language-lean">
+theorem or_swap (p q : Prop) : p ∨ q → q ∨ p :=
+  fun h => h.elim Or.inr Or.inl
+</code></pre>
+With three propositions we can mix the two &mdash; here <em>and</em> distributes over <em>or</em>. We split on the <code class="language-lean">∨</code>, and in each case pair the shared <code class="language-lean">p</code> with whichever side we landed on,
+<pre><code class="language-lean">
+theorem distrib (p q r : Prop) : p ∧ (q ∨ r) → (p ∧ q) ∨ (p ∧ r) :=
+  fun h => h.right.elim
+    (fun hq => Or.inl ⟨h.left, hq⟩)
+    (fun hr => Or.inr ⟨h.left, hr⟩)
+</code></pre>
+
+Equality itself holds a small surprise. Any two proofs of the same proposition are <em>equal</em>, and once more the proof is just <code class="language-lean">rfl</code>,
+<pre><code class="language-lean">
+theorem proofs_agree (p : Prop) (h1 h2 : p) : h1 = h2 := rfl
+</code></pre>
+This is <em>proof irrelevance</em>: to Lean, any two pieces of evidence for a proposition are interchangeable. It fails for ordinary data &mdash; two foods need not be equal, so <code class="language-lean">(a b : Food) : a = b := rfl</code> is rejected. Proofs collapse; data does not. That Lean chooses to identify all proofs is a decision of its foundation, and not the only option: there is another, <em>Univalent Foundations</em>, where equality carries structure and two proofs can genuinely differ. That is a story for <a href="/posts/what-is-is.html">another post</a>.
+
+This already covers a surprising amount. But some things we believe are true cannot be reached by construction alone. There are exactly three, and each is a single axiom.
+
+<h2>Quot.sound: related things become equal</h2>
+
+A lunch remembers order: <code class="language-lean">pack pizza banana</code> and <code class="language-lean">pack banana pizza</code> are different lunches. But we often want to ignore order. So we declare a relation &mdash; "one lunch is the other, swapped",
+<pre><code class="language-lean">
+inductive SwapRelated : Lunch → Lunch → Prop where
+  | swap lb : SwapRelated lb (swap lb)
+</code></pre>
+This relation is symmetric (if <code class="language-lean">x</code> swaps to <code class="language-lean">y</code> then <code class="language-lean">y</code> swaps to <code class="language-lean">x</code>), which we can prove by hand &mdash; no <code class="language-lean">rfl</code>, just taking the proof apart and rebuilding it. We can spell the lunch out explicitly,
+<pre><code class="language-lean">
+theorem swap_symm (x y : Lunch) : SwapRelated x y → SwapRelated y x :=
+  fun h =>
+    match h with
+      | SwapRelated.swap x =>
+      match x with
+        | Lunch.pack a b => SwapRelated.swap (Lunch.pack b a)
+</code></pre>
+or, since a lunch has a single constructor, let Lean fill in the swapped lunch itself,
+<pre><code class="language-lean">
+theorem swap_symm' (x y : Lunch) : SwapRelated x y → SwapRelated y x :=
+  fun h => match h with
+    | SwapRelated.swap x => SwapRelated.swap (swap x)
+</code></pre>
+But it is <em>not</em> reflexive or transitive &mdash; a lunch is not swap-related to itself. So <code class="language-lean">SwapRelated</code> is not an equivalence, and on its own it is not equality. To actually treat swapped lunches as the <em>same</em> meal, we form a quotient with the built-in <code class="language-lean">Quot</code>. It comes with two construction operations: one builds the quotient type from a relation, the other places an element into it (as its glued-together class),
+<pre><code class="language-lean">
+Quot     : (α → α → Prop) → Type            -- the quotient type
+Quot.mk  : (r : α → α → Prop) → α → Quot r   -- an element's class
+</code></pre>
+We use them to define our type of order-forgetting meals,
+<pre><code class="language-lean">
+def Meal : Type := Quot SwapRelated
+def Meal.mk (lb : Lunch) : Meal := Quot.mk SwapRelated lb
+</code></pre>
+So <code class="language-lean">Meal.mk lb</code> is the class of <code class="language-lean">lb</code>, the lunch with its order forgotten. Everything so far was ordinary construction. The axiom appears only when we want an actual <em>equality</em>. That axiom is <code class="language-lean">Quot.sound</code>: if two elements are related, their classes are equal,
+<pre><code class="language-lean">
+Quot.sound : r a b → Quot.mk r a = Quot.mk r b
+</code></pre>
+Feeding it our swap proof gives exactly the equality we wanted &mdash; the same two foods, packed either way, are one meal,
+<pre><code class="language-lean">
+theorem meals_equal (lb : Lunch) : Meal.mk lb = Meal.mk (swap lb) :=
+  Quot.sound (SwapRelated.swap lb)
+
+#print axioms meals_equal
+-- 'meals_equal' depends on axioms: [Quot.sound]
+</code></pre>
+
+<figure style="margin: 1em 0; text-align: center;">
+  <img src="lunch.png" alt="Stick figures holding the same lunch packed in different orders">
+  <figcaption style="color: gray; font-style: italic;">A meal is a meal, whichever way you look at it</figcaption>
+</figure>
+
+And now the laws <code class="language-lean">SwapRelated</code> lacked &mdash; reflexivity, transitivity &mdash; come for free, because <code class="language-lean">Meal</code> uses genuine <code class="language-lean">=</code>, which always has them. That is exactly what the quotient buys: hand it a humble relation, get back equality.
+
+<h2>propext: equivalent propositions become equal</h2>
+
+Now describe a lunch as a <em>set</em> of foods &mdash; a predicate saying, for each food, whether it is included. Membership is then just applying the predicate, and it is a <em>proposition</em>,
+<pre><code class="language-lean">
+def FoodSet : Type := Food → Prop
+def Mem (f : Food) (s : FoodSet) : Prop := s f
+
+def fruitsA : FoodSet := fun f => f = Food.banana ∨ f = Food.apple
+def fruitsB : FoodSet := fun f => f = Food.apple  ∨ f = Food.banana
+</code></pre>
+These two sets clearly have the same members. But "same members" means their membership <em>propositions</em> are equivalent, and we want them <em>equal</em>. Constructive logic has no rule turning <code class="language-lean">↔</code> into <code class="language-lean">=</code>; that rule is the axiom <code class="language-lean">propext</code> &mdash; equivalent propositions are equal,
+<pre><code class="language-lean">
+propext : (a ↔ b) → a = b
+</code></pre>
+Our two memberships are equivalent because <code class="language-lean">∨</code> is symmetric, and <code class="language-lean">propext</code> turns that into an equality,
+<pre><code class="language-lean">
+theorem mem_same (f : Food) : Mem f fruitsA = Mem f fruitsB :=
+  propext ⟨Or.symm, Or.symm⟩   -- the two memberships agree because ∨ is symmetric
+</code></pre>
+To lift this from "equal at each food" to "equal as sets" we need function extensionality, <code class="language-lean">funext</code> &mdash; functions that agree at every input are equal (<code class="language-lean">∀ x</code> reads &ldquo;for every <code class="language-lean">x</code>&rdquo;),
+<pre><code class="language-lean">
+funext : (∀ x, f x = g x) → f = g
+</code></pre>
+Applying it to <code class="language-lean">mem_same</code> at every food finishes the job,
+<pre><code class="language-lean">
+theorem fruits_equal : fruitsA = fruitsB := funext (fun f => mem_same f)
+</code></pre>
+Here is the lovely part: <code class="language-lean">funext</code> is <em>not</em> a fourth axiom &mdash; it is a theorem built from <code class="language-lean">Quot.sound</code>. We can prove it ourselves. First quotient the functions by pointwise equality,
+<pre><code class="language-lean">
+def Pointwise (f g : Food → Prop) : Prop := ∀ x, f x = g x
+def QFun : Type := Quot Pointwise
+</code></pre>
+To get a function back <em>out</em> of a quotient we use <code class="language-lean">Quot.lift</code> &mdash; the counterpart of <code class="language-lean">Quot.mk</code>, which put things in,
+<pre><code class="language-lean">
+Quot.lift : (f : α → β) → (∀ a b, r a b → f a = f b) → Quot r → β
+</code></pre>
+We give it a function on representatives plus a proof that the function respects the relation (related inputs give equal outputs), and it descends to the quotient. Here the function is &ldquo;apply at <code class="language-lean">x</code>&rdquo;, and the obligation <code class="language-lean">hab x</code> is exactly that pointwise-equal functions agree at <code class="language-lean">x</code>,
+<pre><code class="language-lean">
+def recover (q : QFun) : Food → Prop :=
+  fun x => Quot.lift (fun f => f x) (fun a b (hab : Pointwise a b) => hab x) q
+</code></pre>
+The final piece, <code class="language-lean">congrArg</code>, says applying a function to both sides of an equation preserves it (<code class="language-lean">congrArg f : a = b → f a = f b</code>). So <code class="language-lean">funext</code> is just <code class="language-lean">congrArg recover</code> applied to <code class="language-lean">Quot.sound</code>,
+<pre><code class="language-lean">
+theorem myfunext {f g : Food → Prop} (h : ∀ x, f x = g x) : f = g :=
+  congrArg recover (Quot.sound (r := Pointwise) h)
+</code></pre>
+(The <code class="language-lean">(r := Pointwise)</code> just names which relation we mean, since Lean cannot infer it from <code class="language-lean">h</code> alone.) So set equality quietly leans on two axioms at once,
+<pre><code class="language-lean">
+#print axioms mem_same      -- [propext]
+#print axioms fruits_equal  -- [propext, Quot.sound]   (funext is Quot.sound in disguise)
+</code></pre>
+
+<h2>Classical.choice: existence yields an element</h2>
+
+The last axiom is the strongest. <code class="language-lean">Classical.choice</code> takes a mere proof that a type is inhabited and produces an actual element of it,
+<pre><code class="language-lean">
+Classical.choice : Nonempty α → α
+</code></pre>
+We seldom use it raw. The convenient form is <code class="language-lean">Classical.choose</code>, which pulls a witness out of an existence proof (<code class="language-lean">∃ x, p x</code>), with <code class="language-lean">Classical.choose_spec</code> certifying that the witness really satisfies <code class="language-lean">p</code>,
+<pre><code class="language-lean">
+Classical.choose      : (∃ x, p x) → α
+Classical.choose_spec : (h : ∃ x, p x) → p (Classical.choose h)
+</code></pre>
+A proof of <code class="language-lean">∃ x, p x</code> is a witness paired with evidence, written <code class="language-lean">⟨witness, proof⟩</code>. So knowing <em>that</em> a fruit is in our set becomes the power to <em>name</em> one,
+<pre><code class="language-lean">
+theorem fruitsA_nonempty : ∃ f, fruitsA f := ⟨Food.banana, Or.inl rfl⟩
+
+noncomputable def someFruit : Food := Classical.choose fruitsA_nonempty
+theorem someFruit_mem : fruitsA someFruit := Classical.choose_spec fruitsA_nonempty
+
+#print axioms someFruit
+-- 'someFruit' depends on axioms: [Classical.choice]
+</code></pre>
+The report still names <code class="language-lean">Classical.choice</code> because <code class="language-lean">choose</code> is built from it. And <code class="language-lean">noncomputable</code> is the axiom confessing its nature: it grants that a fruit exists, but cannot compute <em>which</em>. From this one axiom flows the law of the excluded middle &mdash; every proposition is true or false (here <code class="language-lean">¬p</code> means &ldquo;<code class="language-lean">p</code> leads to a contradiction&rdquo;),
+<pre><code class="language-lean">
+Classical.em : (p : Prop) → p ∨ ¬p
+</code></pre>
+So any property of a lunch is decided one way or the other,
+<pre><code class="language-lean">
+theorem lunch_decided (P : Lunch → Prop) (lb : Lunch) : P lb ∨ ¬ P lb :=
+  Classical.em (P lb)
+
+#print axioms lunch_decided
+-- 'lunch_decided' depends on axioms: [propext, Classical.choice, Quot.sound]
+</code></pre>
+Excluded middle is not assumed directly; it is <em>derived</em> from choice, and the derivation (Diaconescu's theorem) draws on all three axioms at once. The three things construction could not reach, together, hand us classical logic.
+
+<h2>How much can we do?</h2>
+
+With dependent types and these three axioms you can formalize essentially all of working mathematics &mdash; analysis, algebra, topology &mdash; as Lean's library Mathlib demonstrates daily. But you can never prove <em>everything</em>: Gödel's incompleteness theorems guarantee that any system this expressive has true statements it cannot prove, including its own consistency. The axioms extend our reach into classical mathematics; they do not, and cannot, make the system complete. Some things really are just true.

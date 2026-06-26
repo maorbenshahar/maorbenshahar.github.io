@@ -1,0 +1,63 @@
+/* ============================================================
+   Whole-site styling. Layout/sidebar markup is in _layouts/default.html.
+   To switch the sidebar to a top bar one day: change flex-direction
+   on .layout and the sizing on #sidebar here — no page files change.
+   ============================================================ */
+
+body {
+  background: black;
+  color: white;
+  font-family: "Times New Roman", Times, serif;
+  line-height: 1.5;
+  margin: 0;
+}
+a { color: lightblue; }
+img { max-width: 100%; }
+
+/* ---- Layout: sidebar + content ---- */
+.layout { display: flex; align-items: flex-start; }
+
+#sidebar {
+  width: 160px;
+  flex: 0 0 160px;
+  padding: 16px;
+  position: sticky;   /* stays put while the content scrolls */
+  top: 0;
+}
+
+#content {
+  flex: 1 1 auto;
+  min-width: 0;       /* let wide code scroll in-block instead of stretching the page */
+  max-width: 760px;
+  padding: 16px 24px;
+}
+
+/* Stack the sidebar on top on narrow screens. */
+@media (max-width: 600px) {
+  .layout { flex-direction: column; }
+  #sidebar { position: static; width: auto; flex: 0 0 auto; }
+}
+
+/* ---- Post list (blog.html) ---- */
+.postlist { list-style: none; padding: 0; }
+.postlist li { margin-bottom: 14px; }
+.postlist .date { color: gray; }
+.postlist .summary { color: #bbb; font-size: 0.9em; margin-top: 2px; }
+.postlist .tag { color: #888; font-size: 0.85em; }
+
+/* ---- Post typography ---- */
+.date { color: gray; }
+#content pre { overflow-x: auto; }   /* long Lean lines scroll within their box */
+#content pre code.hljs { padding: 12px; border-radius: 6px; font-size: 1.5em; }
+/* inline Lean: <code class="language-lean">...</code> */
+code.language-lean, code.language-lean.hljs { padding: 0; border-radius: 3px; font-size: 1.3em; }
+
+/* ---- Aside / callout box (optional tangents, dimmer than body) ---- */
+.aside {
+  border-left: 3px solid #555;
+  background: #111;
+  padding: 0.4em 1em;
+  margin: 1.2em 0;
+  color: #bbb;
+}
+.aside summary { cursor: pointer; color: #999; font-style: italic; }
