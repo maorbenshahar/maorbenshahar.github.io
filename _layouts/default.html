@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{% if page.title %}{{ page.title }} &middot; {% endif %}{{ site.title }}</title>
+<link rel="stylesheet" href="/assets/style.css">
+{% if page.layout == 'post' %}
+<!-- Post-only: math + Lean syntax highlighting -->
+<script src="/assets/mathjax-config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="/assets/lean-hljs.js"></script>
+{% endif %}
+</head>
+<body>
+
+<div class="layout">
+
+  <!-- ===== Sidebar: edit this once, every page updates ===== -->
+  <nav id="sidebar">
+    <strong>Maor Ben Shahar</strong><br><br>
+    <img src="/the_picture.png" alt="Maor Ben Shahar" width="140"><br>
+    <a href="/">Home</a><br>
+    <a href="/blog.html">Posts</a><br>
+    <a href="/research.html">Research</a><br>
+    External links:<br>
+    <a href="https://inspirehep.net/authors/1912441">Publications</a><br>
+    <a href="https://physics.mit.edu/faculty/maor-ben-shahar/">Contact</a><br>
+  </nav>
+  <!-- ====================================================== -->
+
+  <main id="content">
+    {{ content }}
+  </main>
+
+</div>
+
+</body>
+</html>

@@ -1,0 +1,10 @@
+title: Maor Ben Shahar
+
+# Posts live in _posts/ ; everything else (index, blog, research) are plain pages.
+# This permalink keeps post URLs identical to before: /posts/using_lean.html
+permalink: /posts/:title:output_ext
+
+exclude:
+  - README.md
+  - Gemfile
+  - Gemfile.lock
