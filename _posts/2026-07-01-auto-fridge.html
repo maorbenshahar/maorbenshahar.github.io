@@ -1,8 +1,633 @@
 ---
 layout: post
-title: "An autoformalizer is a fridge (DRAFT)"
+title: "An autoprover as a refrigerator (DRAFT)"
 date: 2026-06-18
-summary: "but a fridge is not an autoformalizer."
-tags: "#lean #math #AI"
+summary: "Proof search, useful libraries, and phase transitions: a research program with worked models."
+tags: "#lean #math #AI #statistical-mechanics"
 ---
-DRAFT
+<link rel="stylesheet" href="/assets/autoprover/article.css">
+<article id="autoprover-article">
+<p class="draft-note">Working draft. The model calculations below have proofs or an explicit reference to a proved result. Their applicability to mathematical research remains an open question. No measurements of an actual autoprover are reported here.</p>
+
+<p class="lead">A refrigerator spends work to maintain something we want: a cold interior in a warmer world. An automatic theorem prover also spends a resource to reach a desired state: a particular theorem has been proved, and the constructions needed along the way have joined its library. Can the second process admit a theory of cost, efficiency, and transitions comparable to the first?</p>
+
+<p>I want to start with the cost of thinking. Given a mathematical setup and an interesting target, how much reasoning does it take to find a proof? There may be many acceptable moves and very few productive routes. New definitions, types, lemmas, and tactics may be essential parts of the route. The goal is to learn something about this process without possessing a map of every possible proof.</p>
+
+<nav class="article-contents" aria-label="In this article">
+  <strong>In this article</strong>
+  <ol>
+    <li><a href="#fridge">What the refrigerator comparison asks for</a></li>
+    <li><a href="#setup">The mathematical setup and the cost of reasoning</a></li>
+    <li><a href="#branching-and-guidance">A threshold between linear and exponential search</a></li>
+    <li><a href="#knowledge-cascades">A threshold in an expanding library</a></li>
+    <li><a href="#density-is-not-enough">A counterexample: density alone is insufficient</a></li>
+    <li><a href="#search-information">Search information and a free-energy identity</a></li>
+    <li><a href="#uneven-reasoning-effort">When a mean reasoning cost fails to exist</a></li>
+    <li><a href="#research">What could be learned from actual runs?</a></li>
+  </ol>
+</nav>
+
+<h2 id="fridge">What a refrigerator gives us</h2>
+
+<p>For an idealized cyclic refrigerator, let \(Q_c&gt;0\) be heat removed from a reservoir at temperature \(T_c\), and \(Q_h\) the heat delivered to a hotter reservoir at \(T_h&gt;T_c&gt;0\). Temperatures are absolute. Energy conservation and the second law give</p>
+\[
+W=Q_h-Q_c,\qquad
+\frac{Q_h}{T_h}-\frac{Q_c}{T_c}\ge0.
+\]
+<p>The machine returns to its initial state each cycle, so the two reservoirs supply the net entropy change. Substituting the entropy inequality into energy conservation yields</p>
+\[
+\boxed{W\ge Q_c\left(\frac{T_h}{T_c}-1\right).}
+\]
+<p>This lower bound holds under the stated reservoir and cyclic-operation assumptions. It does not require knowing every microscopic trajectory through the machine. Equality would require a reversible cycle.</p>
+
+<p>The corresponding question for a prover is appealing: given the desired mathematical result, what expenditure is unavoidable? We do not yet have counterparts of reservoir temperature or heat extracted. Nor does a newly proved theorem automatically define a decrease in physical entropy. The models below build some of the statistical structure first: search trajectories, cumulative knowledge, response to additional ingredients, and asymptotic cost. A literal energy bound would require an additional account of the physical computation.</p>
+
+<h2 id="setup">What is the system?</h2>
+
+<p>Fix the foundational rules, an initial library \(K_0\), and a target \(G\) that is derivable in this setup. Its interest is given. The library contains definitions and types as well as theorems, and reusable tactics as well as their outputs. A useful intermediate result counts as retained knowledge even if its proof first appeared inside a larger proof.</p>
+
+<p>Imagine a directed hypergraph of constructions. A hyperedge \(\{A,B\}\to C\) records one way to construct \(C\) using \(A\) and \(B\); other edges may give other constructions of \(C\). The nodes carry their contexts and encodings. For example, a subgoal with local hypotheses must retain those hypotheses. A new definition is a construction made in the current setup, not permission to add an arbitrary axiom. We stipulate that each allowed construction respects the fixed foundation.</p>
+
+<p>To include tactics, some dependencies are procedural: certain resources make a proof-producing procedure available. When the procedure is used, its output is checked by the proof assistant. The abstract graph describes both what can be constructed and which reusable tools are available for constructing it.</p>
+
+<p>The complete graph is an analyst's idealization. The prover is given its starting resources and ways to search for further constructions. It is not given every future useful hyperedge. We can also describe a run by its successive configurations, including its accumulated library and working memory. The construction hypergraph records dependencies; successive configurations record the actual search, including unsuccessful attempts.</p>
+
+<p>For now, routine checking and deterministic tactic execution have negligible cost. A call to <code>ring</code> can hide many arithmetic operations; deciding that it is the right call is the step we charge. Splitting a proof into tactic-sized obligations gives a possible resolution of the graph. It does not make all choices equally hard, and it is not a canonical splitting.</p>
+
+<details>
+  <summary>What does the equal-cost simplification preserve?</summary>
+  <p>Let a run make \(\tau\) reasoning selections, and let selection \(i\) cost \(c_i\). If \(0&lt;c_-\le c_i\le c_+&lt;\infty\), with the same bounds at every problem size, then path by path</p>
+  \[
+  c_-\tau\le C=\sum_{i=1}^{\tau}c_i\le c_+\tau.
+  \]
+  <p>Taking expectations gives the same inequalities for expected cost, including infinite expectations. Thus bounded variation preserves linear, quadratic, or exponential order of growth, and preserves whether the mean is finite. This compares the same search policy and trajectories. It does not cover a change of tactics that alters the graph, or a stronger guide whose cost grows without bound with problem size.</p>
+</details>
+
+<p>Each model below fixes its own dynamics and, where needed, an ensemble of graphs. A large-system limit means a specified sequence of increasingly large problems. A graph alone does not determine reasoning cost: we must also say how the prover finds and selects its moves.</p>
+
+
+<section id="branching-and-guidance">
+  <h2>When branching overwhelms guidance</h2>
+
+  <p>A small model already separates two ways of making a prover faster: giving it
+  more reasoning steps, and changing how effectively it chooses those steps. We
+  will count the effort spent selecting a reasoning move. Suppose each selection has the
+  same cost; this is an assumption about the prover, not a property of inference
+  rules.</p>
+
+  <p>A search configuration retains its accumulated results, definitions, types,
+  and working memory. Introduce a progress coordinate \(d\) for its current line of attack, with
+  \(d=0\) meaning that the target has been proved. Assume that this coordinate,
+  after coarse graining, obeys the following transition law. There is one move
+  decreasing \(d\), and \(b\ge1\) alternatives increasing it, where \(b\) is an integer. The decreasing move
+  receives selection weight \(w&gt;0\), while each alternative receives weight
+  one. Thus</p>
+
+  \[
+    p=\Pr(d\mapsto d-1)=\frac{w}{w+b},
+    \qquad
+    q=\Pr(d\mapsto d+1)=\frac{b}{w+b}.
+  \]
+
+  <p>The coordinate is supplied by the model. We have not constructed a heuristic
+  that can recognize these directions in theorem space. A real prover would need
+  some signal correlated with progress, and obtaining a stronger signal might
+  itself cost more reasoning. Also, increasing \(d\) need not erase an acquired
+  lemma: attention can move to a less productive approach while the library remains
+  available. This coordinate is not the shortest proof distance from the accumulated
+  known region, which cannot increase when freely reusable knowledge is added.
+  Assuming that this
+  single coordinate has a fixed transition law is a substantial simplification.</p>
+
+  <p>Make the model finite by allowing coordinate values \(0,\ldots,L\), for an integer \(L\ge1\), starting at
+  \(L\), and stopping at zero. At the outer boundary, an attempted increase leaves
+  the distance at \(L\). That unsuccessful choice still costs a reasoning step.
+  Write \(T_i\) for the expected number of further selections from distance
+  \(i\). A direct calculation gives</p>
+
+  \[
+    T_L=
+    \begin{cases}
+      \displaystyle
+      \frac{L}{p-q}-\frac{q}{(p-q)^2}
+      \left[1-\left(\frac{q}{p}\right)^L\right],&p\ne q,\\[1.2em]
+      L(L+1),&p=q.
+    \end{cases}
+  \]
+
+  <p>For fixed \(w\) and \(b\), this produces three different scaling laws as
+  \(L\) increases:</p>
+
+  \[
+    T_L\sim
+    \begin{cases}
+      \displaystyle\frac{w+b}{w-b}\,L,&w&gt;b,\\[0.8em]
+      L^2,&w=b,\\[0.8em]
+      \displaystyle\frac{b(w+b)}{(b-w)^2}
+      \left(\frac{b}{w}\right)^L,&w&lt;b.
+    \end{cases}
+  \]
+
+  <p>The useful selection bias must outweigh the multiplicity of distracting
+  choices. If we write \(w=e^{\beta\Delta}\), the threshold becomes
+  \(\beta\Delta=\log b\). This notation expresses a competition between bias
+  and branching; neither \(\beta\) nor \(\Delta\) has yet been assigned a
+  thermodynamic meaning. Every finite instance has a finite mean completion
+  cost. The sharp distinction appears in how that cost grows across increasingly
+  large instances, not as a singularity of one finite search.</p>
+
+  <p>Near balance, the finite-size crossover is controlled by
+  \(L\log(w/b)\). When its magnitude is small, the terms of the geometric sum
+  below remain close to one and the completion cost stays close to the quadratic
+  law. The model thus suggests comparing different problem sizes; an apparent
+  slowdown in one finite run does not establish a transition.</p>
+
+  <figure>
+    <a href="/assets/autoprover/guided-search.svg" aria-label="Open the search-cost graph at full size">
+      <img src="/assets/autoprover/guided-search.svg" width="840" height="500"
+           alt="Expected reasoning selections versus initial progress coordinate L. Guidance ratio two gives linear growth, ratio one quadratic growth, and ratio one-half exponential growth. The vertical axis is logarithmic."
+           loading="lazy">
+    </a>
+    <figcaption>Exact expected costs in the reflected search model. The vertical axis is logarithmic; the rapidly rising curve represents exponential cost. Each selection costs one reasoning unit. <a href="/assets/autoprover/guided-search.svg">Open the full-size graph.</a></figcaption>
+  </figure>
+  <details>
+    <summary>Deriving the completion time</summary>
+
+    <p>Conditioning on the first selection gives</p>
+
+    \[
+      T_0=0,\qquad
+      T_i=1+pT_{i-1}+qT_{i+1}\quad(1\le i&lt;L),
+      \qquad T_L=1+pT_{L-1}+qT_L.
+    \]
+
+    <p>The mean is finite: from any nonabsorbing state, making decreasing choices
+    until absorption succeeds within \(L\) selections with probability at least
+    \(p^L&gt;0\). Successive blocks therefore give a geometric upper bound on
+    the survival probability. We can consequently manipulate the expectations
+    without assuming the conclusion.</p>
+
+    <p>Put \(D_i=T_i-T_{i-1}\) and \(r=q/p\). The boundary equation gives
+    \(D_L=1/p\); the interior equations give
+    \(D_i=1/p+rD_{i+1}\). Iterating backwards and summing yields</p>
+
+    \[
+      D_i=\frac1p\sum_{k=0}^{L-i}r^k,
+      \qquad
+      T_L=\sum_{i=1}^L D_i
+          =\frac1p\sum_{k=0}^{L-1}(L-k)r^k.
+    \]
+
+    <p>For \(r\ne1\), the last sum equals
+    \(L/(1-r)-r(1-r^L)/(1-r)^2\). For \(r=1\), it equals
+    \(L(L+1)/2\), and \(p=1/2\). These give the displayed formula and its
+    three asymptotic regimes. A different convention at the reflecting boundary
+    changes constants; the stated formula uses an outward attempt that stays
+    in place.</p>
+  </details>
+
+  <p>Under this model, increasing available compute preserves the regime. In the
+  exponential regime, multiplying the number of affordable selections by a large
+  factor \(M\) increases the affordable distance, measured by expected cost, by approximately
+  \(\log M/\log(b/w)\). Changing the guidance ratio \(w/b\) can instead
+  change the scaling law itself. This comparison holds with a fixed cost per
+  selection. If improving \(w\) costs more thought per choice, that cost must
+  multiply the resulting expectation before comparing provers.</p>
+</section>
+
+
+
+<h2 id="knowledge-cascades">A library can cross a threshold</h2>
+
+<p>
+Suppose a new lemma makes several further lemmas easy, and those make still more
+constructions easy. Can this amplification change qualitatively as the known
+library grows? A simple random model says yes. Here “easy” includes recognizing
+what to try, choosing the necessary premises, and composing the construction.
+Executing and checking the resulting proof remain negligible costs.
+</p>
+
+<p>
+Take \(N\) labelled mathematical objects, temporarily treating theorems,
+definitions, types, and tactics alike. Reserve one label as a possible target.
+Choose \(\lfloor\rho N\rfloor\) distinct initially known objects uniformly from
+the other labels, with \(0&lt;\rho&lt;1\). Sample \(\lfloor\lambda N\rfloor\)
+binary rules uniformly, allowing repetitions:
+\[
+\{A,B\}\longrightarrow C,
+\]
+where the three labels are distinct and the prerequisite pair is unordered.
+Both prerequisites are needed; different rules concluding \(C\) are alternative
+derivations. The average number of incoming rules per object tends to
+\(\lambda\). These are the easy rules. Give every object a much harder
+construction from the original setup, outside this restricted graph.
+Every target theorem therefore remains provable throughout the experiment.
+</p>
+
+<p>
+Keep applying easy rules whose premises are known, retaining each conclusion,
+until no further object can be added. Call the resulting set the easy closure.
+The order of application cannot change this set: by induction, every construction
+sequence stays inside every closed superset of the seeds, and a saturated sequence
+is itself such a closed superset. Thus all saturated sequences give the least
+closed superset. Order can change the time to a particular target, which this
+first model does not calculate.
+</p>
+
+<p>
+To interpret closure as achievable reasoning work, assume an efficient agenda:
+newly established premises expose the relevant easy constructions, and each
+rule needs only bounded total attention. This is an additional assumption about
+discovery and retrieval. Checking an already supplied rule cheaply would not
+justify it. Under this assumption, the sparse graph requires \(O(N)\) reasoning
+work to saturate. Establishing a positive fraction of new objects still requires
+order \(N\) individual constructions. Without the agenda assumption, closure
+describes available opportunities, while locating them may dominate the cost.
+The assumed access is to relevant local rules, rather than the full truth graph.
+</p>
+
+<p>
+Let \(X_N\) be the fraction of objects in the final closure. A mean-field
+calculation predicts its large-system limit \(x\). A typical object has
+approximately Poisson\((\lambda)\) incoming rules. Treating the availability of
+their prerequisites as independent, a rule is enabled with probability \(x^2\).
+The probability that no incoming rule is enabled is consequently
+\[
+\sum_{m=0}^{\infty}
+e^{-\lambda}\frac{\lambda^m}{m!}(1-x^2)^m
+=e^{-\lambda x^2}.
+\]
+An object remains unknown if it was not a seed and no rule produces it:
+\[
+\boxed{x=1-(1-\rho)e^{-\lambda x^2}.}
+\]
+</p>
+
+<p>Independence here is a heuristic, not a proof. For this particular sparse
+random ensemble, a proved limit theorem justifies the equation away from
+multiple-root parameters.</p>
+<details>
+<summary>The precise result being used</summary>
+<p>Lemma 3.1 of
+<a href="https://arxiv.org/pdf/math/0505032">Moore, Istrate, Demopoulos, and
+Vardi</a> establishes \(X_N\to x\) in probability when the smallest positive
+root is simple, for fixed positive seed density as \(N\to\infty\). Their
+parameters are \(d_1=\rho,d_2=0,d_3=\lambda\); we use the positive closure
+analyzed in their lemma, with the formula's negative target literal removed.
+Sampling rules with or without replacement has the same limit here:
+the probability of any duplicate is \(O(1/N)\).
+The independence calculation thus has a rigorous limiting justification in
+this particular ensemble. It is not a theorem about arbitrary mathematical
+libraries, nor does that lemma cover the multiple root at the transition.
+</p>
+</details>
+
+<p>
+When the equation has several roots, we select the smallest. Starting with
+\(x_0=\rho\) and iterating
+\[
+x_{n+1}=1-(1-\rho)e^{-\lambda x_n^2}
+\]
+gives an increasing bounded sequence. Every fixed point bounds this sequence
+from above, so its limit is the least fixed point. This iteration selects the
+closure branch; its iteration count is not a count of serial reasoning steps.
+</p>
+
+<p>
+For \(\lambda&lt;2\), increasing the seed density increases the limiting closure
+continuously. For \(\lambda&gt;2\), a small increase can eliminate the lower
+branch and produce a discontinuous jump. At \(\lambda=3\), the threshold is
+\(\rho_c\approx0.0982574\). Solving the equation gives \(x\approx0.19994\)
+at \(\rho=0.098\), but \(x\approx0.93434\) at \(\rho=0.099\).
+The extra seeds can therefore unlock a large fraction of the remaining objects.
+These numbers are properties of the model, not measurements of an autoprover.
+</p>
+<p>The reserved target is initially unknown, so its limiting probability of entering
+the easy closure is \((x-\rho)/(1-\rho)\), rather than \(x\). To see this, subtract
+the seeds from the expected closure size and divide by the number of nonseed
+labels; symmetry gives the same probability for each such label. Boundedness of
+\(X_N\) turns its convergence in probability into convergence of its mean.
+The probabilities are approximately \(11.3\%\) and \(92.7\%\) for the two
+densities above. The fixed target behaves like the other labels because this
+ensemble makes no distinctions between their mathematical roles.</p>
+
+<figure>
+  <a href="/assets/autoprover/knowledge-cascade.svg" aria-label="Open the knowledge-cascade graph at full size">
+    <img src="/assets/autoprover/knowledge-cascade.svg" width="840" height="540"
+         alt="Easy closure fraction versus seed fraction. Random dependencies at density three jump near 9.83 percent seeds. Densities one-and-a-half and two remain continuous. Disjoint groups of four have density three but a smooth response."
+         loading="lazy">
+  </a>
+  <figcaption>
+    The least fixed point can jump as the initial library grows. The curve
+    describes the infinite-system limit; each finite library has finitely many
+    additions, and its transition location fluctuates with the sampled rules.
+    The dotted line marks the one-sided jump, without asserting concentration
+    exactly at the critical parameter. The dashed curve is the counterexample
+    derived below. <a href="/assets/autoprover/knowledge-cascade.svg">Open the full-size graph.</a>
+  </figcaption>
+</figure>
+
+<details>
+  <summary>The threshold calculation</summary>
+  <p>
+  Rearranging the fixed-point equation expresses the seed density as
+  \[
+  \rho(x)=1-(1-x)e^{\lambda x^2},
+  \qquad
+  \rho'(x)=e^{\lambda x^2}\bigl[1-2\lambda x(1-x)\bigr].
+  \]
+  Since \(x(1-x)\leq1/4\), this derivative is positive for \(\lambda&lt;2\).
+  At \(\lambda=2\) it first vanishes at \(x=1/2\), giving the critical endpoint
+  \[
+  (\lambda_c,x_c,\rho_c)=
+  \left(2,\frac12,1-\frac{\sqrt e}{2}\right).
+  \]
+  For \(\lambda&gt;2\), the low branch ends at
+  \[
+  x_-=\frac{1-\sqrt{1-2/\lambda}}2,
+  \qquad
+  \rho_c(\lambda)=1-(1-x_-)e^{\lambda x_-^2}.
+  \]
+  Here \(\rho(x)\) has a local maximum: increasing \(\rho\) past it removes
+  the low solution, leaving a larger least root. Substituting \(\lambda=3\)
+  gives the quoted threshold. At the endpoint the jump vanishes, but the
+  response slope diverges.
+  </p>
+  <p>The cited simple-root theorem does not directly cover the continuous
+  endpoint at \(\lambda=2\). Here monotonicity supplies the missing argument.
+  Choose seed sets by taking initial segments of one random ordering, so they
+  are nested as \(\rho\) increases. The closure at \(\rho_c\) is sandwiched
+  between the closures at \(\rho_c-\varepsilon\) and
+  \(\rho_c+\varepsilon\). Those two densities have simple roots, so their
+  closure fractions converge in probability. Taking \(N\to\infty\) and then
+  \(\varepsilon\to0\), continuity of the least root forces the middle fraction
+  to converge to \(1/2\). At a discontinuous threshold the two one-sided limits
+  differ, so this argument does not establish concentration there.</p>
+</details>
+
+<p>
+There is also a useful local interpretation. Around a stable closure of density
+\(x\), a newly supplied unknown object participates in about \(2\lambda\)
+rules as a premise. A rule can add another object when its other premise is
+known and its conclusion is unknown. Ignoring collisions and correlations
+gives an expected number of descendants
+\[
+R=2\lambda x(1-x).
+\]
+Approximating successive discoveries by independent branching, the mean total
+avalanche \(S\), including its initial seed, satisfies
+\[
+\mathbb E[S]=\sum_{n=0}^{\infty}\mathbb E[Z_n]
+=\sum_{n=0}^{\infty}R^n
+=\frac1{1-R}\quad(R&lt;1).
+\]
+Here \(Z_n\) counts generation \(n\), with \(Z_0=1\);
+independent offspring of mean \(R\) give \(\mathbb E[Z_n]=R^n\) by induction.
+Summing nonnegative generation sizes justifies the expectation.
+This is exact for that branching approximation, not for finite hypergraphs.
+As \(R\) approaches one, small additions have increasing consequences; at
+the branch endpoint, \(R=1\).
+</p>
+
+<p>
+The transition concerns what our prover can reach through the stipulated easy
+constructions. It changes neither truth nor the eventual reachability allowed
+by the hard fallback proofs. It also does not manufacture free proofs: an
+avalanche amortizes an initial difficult insight across many bounded-cost
+constructions. More compute can execute those constructions sooner; a larger
+shared library can change which constructions become available within this
+easy regime.
+</p>
+
+
+<h2 id="density-is-not-enough">A tempting generalization fails</h2>
+
+<p>Can the mean rule density predict this transition for an arbitrary large library? The random-model calculation suggests the question, but a simple counterexample rules out that conclusion.</p>
+
+<p>Divide \(N\) objects into groups of four. For each object, include all three rules whose premises are a pair of the other three group members. There are twelve binary rules per group, hence exactly three incoming rules per object. A group with zero or one initial object cannot grow. If it starts with two or more, every remaining member can be constructed.</p>
+
+<p>With independent seed probability \(\rho\), an initially unknown object becomes known exactly when at least two of the other three members were seeds. Including objects supplied initially, an arbitrary member's probability of belonging to the final closure is therefore</p>
+\[
+x_{\mathrm{groups}}(\rho)
+=\rho+(1-\rho)\left[3\rho^2(1-\rho)+\rho^3\right]
+=\rho+(1-\rho)(3\rho^2-2\rho^3).
+\]
+<p>The empirical closure fraction converges to this polynomial as the number of independent groups grows, by the law of large numbers for their bounded closure sizes. It is smooth for all \(0\le\rho\le1\), despite having the same mean density \(\lambda=3\) as the random model with a jump. The dashed curve in the figure shows this counterexample.</p>
+
+<details>
+  <summary>Keeping the same fixed-size seed ensemble</summary>
+  <p>The comparison also works when exactly \(m=\lfloor\rho N\rfloor\) seeds are chosen uniformly, as in the random model. For any specified pattern with \(k\) seeds among four labels, its probability is</p>
+  \[
+  \frac{(m)_k(N-m)_{4-k}}{(N)_4}
+  \longrightarrow \rho^k(1-\rho)^{4-k},
+  \]
+  <p>where \((a)_j=a(a-1)\cdots(a-j+1)\). The same calculation for two distinct groups uses eight labels and shows that their closure fractions have covariance tending to zero. These covariances are equal by symmetry, while each group's variance is bounded. The variance of the average over groups therefore tends to zero. The mean tends to the polynomial above, so convergence in probability follows. Excluding one reserved target from the seeds changes none of these limiting fractions.</p>
+</details>
+
+<p>This disproves a transition criterion based only on mean dependency density. It leaves a more specific research question: which properties of correlations, modules, prerequisite counts, and discovery policies determine the scaling regimes?</p>
+
+<details>
+  <summary>One exact statement about combining libraries</summary>
+  <p>Write \(\operatorname{Cl}(K)\) for closure under the same fixed collection of easy rules. For libraries \(K_1,K_2\) containing any common starting setup,</p>
+  \[
+  \operatorname{Cl}(K_1\cup K_2)
+  \supseteq \operatorname{Cl}(K_1)\cup\operatorname{Cl}(K_2).
+  \]
+  <p>Every construction possible from either smaller library remains possible from their union; induction on its construction sequence proves the inclusion. If every rule has only one prerequisite, trace a construction backwards to its starting node: it starts in one library or the other, so equality holds. Multi-premise rules allow strict inclusion. With \(K_1=\{a\}\), \(K_2=\{b\}\), and the sole rule \(\{a,b\}\to c\), neither separate closure contains \(c\), but the joint closure does.</p>
+  <p>This is a statement about restricted easy closure. Full deductive closure already contains the targets stipulated to have hard fallback proofs. If a tactic is one of the new resources, its availability must be represented among the prerequisites; silently changing the rules would be a different comparison.</p>
+</details>
+
+
+<section id="search-information">
+  <h2>How much must the search be steered?</h2>
+
+  <p>A search history records more than its finished proof: it includes reasoning, failed attempts, and results added to the library. We can put a probability distribution on these histories and ask how strongly a prover must change that distribution to make a chosen theorem likely to be proved.</p>
+
+  <p>Fix an initial library, a target theorem, and a finite computation horizon. Assume the available encoding makes the set \(\Omega\) of admissible histories finite. Let \(Q\) be a specified reference search distribution, positive on every history in \(\Omega\), and let \(P\) describe another prover. The reference may already contain mathematical expertise; nothing requires uniform random search. Let \(A\subset\Omega\) be the histories that prove the target within the horizon, with \(0&lt;q=Q(A)&lt;1\), and write \(p=P(A)\).</p>
+
+  <p>The relative entropy</p>
+  \[
+    D(P\Vert Q)=\sum_{\gamma\in\Omega}
+    P(\gamma)\log\frac{P(\gamma)}{Q(\gamma)}
+  \]
+  <p>measures the change from reference search to informed search. Logs are natural, so its units are nats; terms with \(P(\gamma)=0\) contribute zero. It is not automatically the computation needed to produce that change.</p>
+
+  <p>There is an exact lower bound:</p>
+  \[
+    D(P\Vert Q)\ge d(p\Vert q)
+    =p\log\frac pq+(1-p)\log\frac{1-p}{1-q}.
+  \]
+  <p>Whatever else distinguishes the two provers, changing their probability of success requires at least this much relative entropy. The bound is sharp when arbitrary distributions over histories are allowed.</p>
+
+  <details>
+    <summary>Proof of the success-probability bound</summary>
+    <p>For \(0&lt;p&lt;1\), split the defining sum into successful and unsuccessful histories. Substituting \(P(\gamma)=pP(\gamma\mid A)\) on \(A\), and the corresponding expressions on its complement, gives</p>
+    \[
+      D(P\Vert Q)=d(p\Vert q)
+      +pD(P(\cdot\mid A)\Vert Q(\cdot\mid A))
+      +(1-p)D(P(\cdot\mid A^c)\Vert Q(\cdot\mid A^c)).
+    \]
+    <p>Relative entropy is nonnegative: Jensen's inequality gives</p>
+    \[
+      -D(R\Vert S)
+      =\mathbb E_R\log\frac{S}{R}
+      \le\log\sum_{\gamma:R(\gamma)&gt;0}S(\gamma)\le0.
+    \]
+    <p>Equality holds exactly when \(R=S\). Dropping the two conditional divergences proves the bound. The endpoint cases \(p=0,1\) follow by keeping only the nonempty part. For any prescribed \(p\), equality is attained by the mixture \(pQ(\cdot\mid A)+(1-p)Q(\cdot\mid A^c)\).</p>
+  </details>
+
+  <p>In particular, making success certain has the exact minimum</p>
+  \[
+    \min_{P:P(A)=1}D(P\Vert Q)=\log\frac1q.
+  \]
+  <p>This is a target-relative measure of search information. A target with reference success probability \(e^{-100}\) requires at least 100 nats of steering to guarantee success. This number depends on the reference prover, starting library, and horizon. It does not assign an intrinsic entropy to the theorem.</p>
+
+  <details>
+    <summary>Proof and meaning of the certain-success minimum</summary>
+    <p>Write \(Q_A=Q(\cdot\mid A)\). For every \(P\) supported on \(A\),</p>
+    \[
+      D(P\Vert Q)=D(P\Vert Q_A)+\log\frac1q.
+    \]
+    <p>Nonnegativity gives the minimum, uniquely attained by \(P=Q_A\). Sampling this conditional distribution may require knowing which continuations succeed. Its existence establishes an optimum over distributions, not a computational procedure that a resource-limited prover can necessarily carry out.</p>
+  </details>
+
+  <p>We can also include expenditure. Give each history a finite, nonnegative reasoning cost \(C(\gamma)\). Under our present simplification, deterministic tactic execution and checking are negligible. For \(\beta&gt;0\), define</p>
+  \[
+    Z_A(\beta)=\sum_{\gamma\in A}Q(\gamma)e^{-\beta C(\gamma)},
+    \qquad F_A(\beta)=-\beta^{-1}\log Z_A(\beta).
+  \]
+  <p>Then the following free-energy identity is exact:</p>
+  \[
+    F_A(\beta)=\min_{P:P(A)=1}
+    \left\{\mathbb E_P C+\beta^{-1}D(P\Vert Q)\right\}.
+  \]
+  <p>This is an application of the Gibbs variational principle; <a href="https://arxiv.org/abs/1205.6946">Bierkens and Kappen</a> develop its relative-entropy control formulation. The added term prices departures from the reference distribution. It is a modeling choice, separate from the reasoning cost already counted in \(C\).</p>
+
+  <details>
+    <summary>Proof of the free-energy identity</summary>
+    <p>Our assumptions ensure \(0&lt;Z_A(\beta)&lt;\infty\). Define</p>
+    \[
+      P_\beta^*(\gamma)=
+      \frac{Q(\gamma)\mathbf1_A(\gamma)e^{-\beta C(\gamma)}}{Z_A(\beta)}.
+    \]
+    <p>For any \(P\) supported on \(A\), substitute this expression into the divergence to obtain</p>
+    \[
+      D(P\Vert P_\beta^*)=D(P\Vert Q)
+      +\beta\mathbb E_PC+\log Z_A(\beta).
+    \]
+    <p>Rearranging yields</p>
+    \[
+      \mathbb E_PC+\beta^{-1}D(P\Vert Q)
+      =F_A(\beta)+\beta^{-1}D(P\Vert P_\beta^*).
+    \]
+    <p>Nonnegativity proves the identity and identifies its unique minimizer. Restricting to computationally realizable policies can only raise the infimum; the restricted class might contain no policy that guarantees success within the horizon.</p>
+  </details>
+
+  <p>The formula expresses a competition between cost and the abundance of accessible successful histories. If two disjoint successful families have constant costs \(c_1,c_2\) and positive reference masses \(w_1,w_2\), their probabilities under the minimizer satisfy</p>
+  \[
+    \frac{P_\beta^*(\text{family }1)}{P_\beta^*(\text{family }2)}
+    =\frac{w_1}{w_2}e^{-\beta(c_1-c_2)}.
+  \]
+  <p>A more accessible family can outweigh a cheaper one. The parameter \(\beta^{-1}\) sets the price of a nat in units of reasoning cost. It is neither a measured physical temperature nor the model's token-sampling temperature. <a href="https://arxiv.org/abs/1204.6481">Ortega and Braun</a> study related information-cost models of bounded rationality.</p>
+
+  <p>These quantities concern histories a prover could in principle record. Estimating success frequencies and evaluating reference probabilities does not require enumerating the complete mathematical hypergraph, although estimating an extremely small \(q\) can demand impractical sampling. If we record only tactic choices, the resulting distributions describe those visible histories. Their relative entropy cannot exceed that of the full computation: partition the histories by their visible records and repeat the conditional-divergence decomposition used in the first proof. The full divergence is the visible divergence plus an average of nonnegative conditional divergences. Hiding deliberation can hide differences between the provers. The statistical description therefore needs an explicit choice of what a history records.</p>
+
+  <p>The resource connection remains a research question: for a specified prover, what steering distributions can a given reasoning budget realize? No fixed conversion from relative entropy to charged reasoning selections follows from this abstract model. For a counterexample, consider two possible outputs \(a,b\), with \(Q(a)=2^{-m}\) and \(P(a)=1\). Supply these policies in advance and charge one unit per visible choice. Then \(D(P\Vert Q)=m\log2\) for one choice, which is unbounded as \(m\) increases. A microscopic model that charges policy construction, random bits, or probability precision could impose additional restrictions. Pretraining costs likewise need an explicit accounting convention. These identities give exact statistical constraints; connecting them to computational work requires a model of the prover's capabilities.</p>
+  <p>For this finite history space, the partition function is a finite sum of positive analytic functions of the real parameter \(\beta&gt;0\); its free energy is therefore analytic there. A singular phase transition would require a specified limiting family. Nor does the variational identity establish that an actual prover minimizes its objective. Whether this family of distributions usefully describes informed proof search is a further research question.</p>
+</section>
+
+
+<section id="uneven-reasoning-effort">
+  <h2>Uneven effort within an approach</h2>
+
+  <p>Another mechanism concerns prolonged exploration of one approach.
+  Suppose an episode has a barrier parameter \(B\ge0\), distributed as
+  \(\Pr(B&gt;x)=e^{-x/B_0}\) for \(x\ge0\), and escaping it requires effort
+  \(C=c_0e^{\gamma B}\), where \(c_0,B_0,\gamma&gt;0\). Effort is treated as
+  continuous at this scale; it represents many reasoning selections, not a slow
+  proof checker. These are explicit distributional assumptions, similar to those
+  used in <a href="https://arxiv.org/abs/cond-mat/9601012">Monthus and Bouchaud's
+  trap models</a>.</p>
+
+  <p>Changing variables gives, exactly for \(c\ge c_0\),</p>
+
+  \[
+    \Pr(C&gt;c)
+      =\Pr\!\left(B&gt;\frac{\log(c/c_0)}{\gamma}\right)
+      =\left(\frac{c}{c_0}\right)^{-\alpha},
+    \qquad \alpha=\frac1{\gamma B_0}.
+  \]
+
+  <p>Integrating this survival probability therefore gives</p>
+
+  \[
+    \mathbb E[C]
+      =c_0+\int_{c_0}^{\infty}\left(\frac{c}{c_0}\right)^{-\alpha}\,dc
+      =\begin{cases}
+        \displaystyle\frac{\alpha c_0}{\alpha-1},&\alpha&gt;1,\\[0.8em]
+        \infty,&0&lt;\alpha\le1.
+      \end{cases}
+  \]
+
+  <p>The divergence at \(\alpha=1\) is logarithmic in an upper cost cutoff: for \(R\ge c_0\), \(\mathbb E[\min(C,R)]=c_0[1+\log(R/c_0)]\). Bounding the barriers
+  removes the divergence, while potentially leaving a broad range of episode
+  costs. This calculation concerns an episode's marginal effort distribution.
+  It does not by itself establish aging, a law of mathematical progress, or a
+  distribution of proof completion times. Those conclusions require a model of
+  how episodes follow one another, what escapes accomplish, and how retained
+  discoveries alter later searches.</p>
+</section>
+
+
+<h2 id="research">From models to mathematical research</h2>
+
+<p>The calculations establish several different possibilities. In the biased search model, changing guidance can change exponential cost into linear cost. In the random dependency model, adding prerequisites can cause a macroscopic accessibility jump. In the trap model, the idealized mean episode cost can fail to exist. None establishes that a particular LLM and proof assistant exhibits the corresponding behavior.</p>
+
+<p>These models also distinguish uses of additional computation. For a fixed sequence of reasoning choices, executing \(M\) choices per second instead of one divides the elapsed time by \(M\). It leaves the number of choices unchanged. A larger library, a different guide, or shared discoveries can change the choice process itself. The earlier calculations quantify particular examples of those changes.</p>
+
+<details>
+  <summary>What independent parallel searches guarantee</summary>
+  <p>If one search succeeds by effort \(c\) with probability \(F(c)\), then \(M\) independent copies each given that effort succeed collectively with probability</p>
+  \[
+  1-[1-F(c)]^M.
+  \]
+  <p>All copies fail exactly when their independent failure events occur together; multiplying their probabilities proves the formula. The maximum combined expenditure is \(Mc\), and can be smaller if workers stop on collective success. Shared discoveries make the searches dependent, so this formula no longer determines their behavior. The easy-closure example above demonstrates one way that sharing can add opportunities unavailable to the separate searches.</p>
+</details>
+
+<p>To connect these models to observations, the full graph is unnecessary. We can record which approaches were tried, reasoning expenditure, verified dependencies, and when new resources became available. These records expose realized paths, not all unrealized alternatives. They support particular measurements:</p>
+
+<div class="table-scroll" tabindex="0" role="region" aria-label="Connections between models and observations">
+<table>
+  <thead><tr><th scope="col">Quantity in the model</th><th scope="col">What an experiment could examine</th><th scope="col">What remains to establish</th></tr></thead>
+  <tbody>
+    <tr><td>Completion cost \(T_L\)</td><td>How reasoning cost changes across a controlled family of increasing problems.</td><td>A defensible analogue of \(L\), and whether the assumed progress dynamics apply.</td></tr>
+    <tr><td>Response to new library ingredients</td><td>Matched searches with and without particular lemmas, definitions, or tactics.</td><td>Whether improvements reflect enabling dependencies, retrieval changes, or another mechanism.</td></tr>
+    <tr><td>Success probabilities \(p,q\)</td><td>Repeated runs of fixed policies from the same starting resources.</td><td>Enough observations to resolve rare successes; a meaningful reference policy.</td></tr>
+    <tr><td>Episode-cost tails</td><td>How much effort is spent within individual approaches before leaving them.</td><td>An operational definition of an episode and evidence beyond a finite observed range.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>A failed run has not revealed its completion cost. Any comparison using observed means must say how such runs are treated. Conversely, a handful of bursts cannot establish an infinite-system discontinuity. The abstract models tell us what families of observations to seek; extrapolation requires testing their assumptions at several scales.</p>
+
+<p>For mathematical progress, the targets and their interest weights should remain specified in advance of the comparison. Counting every additional syntactic consequence would change the question. The random cascade model treats labels symmetrically; applying it to a selected theorem or research area requires understanding that area's dependency structure.</p>
+
+<p>Three questions remain central to this research program:</p>
+<ol>
+  <li>What restrictions on an implementable prover connect reasoning expenditure to the attainable distribution of search histories?</li>
+  <li>Which correlated dependency ensembles retain an accessibility transition, and what changes when the prover must discover the local rules?</li>
+  <li>How do reusable definitions and tactics change those dependencies and the cost of identifying productive routes?</li>
+</ol>
+
+<p>The attempted simplification using mean density alone already failed by explicit counterexample. The more restricted models provide proved starting points, and identify assumptions that a stronger theory would have to justify.</p>
+
+<p>The refrigerator comparison still asks for more: a relation between the desired mathematical outcome and unavoidable physical work. The free-energy identity here prices changes of search distribution by assumption; it has not derived that price from hardware. <a href="https://arxiv.org/abs/1901.00386">Wolpert's review of the thermodynamics of computation</a> describes how physical cost depends on computational implementation and distributions of inputs. Connecting that physical theory to the reasoning and library models is part of the project.</p>
+
+<p>For now, the question I would pursue is this: under what conditions does a hard-won mathematical ingredient merely add one construction, and under what conditions does it make a large family of interesting constructions accessible?</p>
+
+<details class="reproduction">
+  <summary>Reproduce the figures and numerical examples</summary>
+  <p>The figures show the stipulated models, not prover measurements. Their <a href="/assets/autoprover/models.py">Python source</a> also checks the completion-time formula against independently solved finite Markov chains and the four-object closure polynomial against all sixteen seed configurations.</p>
+  <p>From a checkout of this website, run <code>uv run assets/autoprover/models.py</code>. The script declares its plotting dependencies and writes the SVG and PNG figures beside itself. Numerical checks supplement the analytic arguments; they do not prove an asymptotic theorem.</p>
+</details>
+</article>

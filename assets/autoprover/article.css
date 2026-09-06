@@ -1,0 +1,51 @@
+#autoprover-article {
+  font-size: 1.08rem;
+  line-height: 1.65;
+  overflow-wrap: break-word;
+}
+#autoprover-article .lead { font-size: 1.15em; }
+#autoprover-article .draft-note {
+  color: #b9c3cc;
+  border-left: 3px solid #7396ad;
+  padding: .65em 1em;
+  background: #10171c;
+  font-size: .9em;
+}
+#autoprover-article h2 { margin-top: 2em; line-height: 1.25; scroll-margin-top: 1em; }
+#autoprover-article .article-contents {
+  margin: 1.6em 0;
+  padding: 1em 1.4em;
+  border: 1px solid #39434b;
+}
+#autoprover-article .article-contents ol { margin-bottom: 0; padding-left: 1.3em; }
+#autoprover-article details {
+  margin: 1.4em 0;
+  padding: .75em 1em;
+  border: 1px solid #42515b;
+  border-radius: 4px;
+  background: #0d1317;
+}
+#autoprover-article summary { cursor: pointer; color: #b6d9ee; font-weight: bold; }
+#autoprover-article summary:focus-visible,
+#autoprover-article a:focus-visible,
+#autoprover-article .table-scroll:focus-visible { outline: 2px solid #f2c66d; outline-offset: 4px; }
+#autoprover-article figure { margin: 1.8em 0; }
+#autoprover-article figure img { width: 100%; height: auto; display: block; background: #fff; }
+#autoprover-article figcaption { color: #c0c7cb; margin-top: .7em; font-size: .9em; }
+#autoprover-article mjx-container[display="true"] {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: .35em 0;
+}
+#autoprover-article .table-scroll { overflow-x: auto; margin: 1.5em 0; }
+#autoprover-article table { width: 100%; min-width: 540px; border-collapse: collapse; font-size: .94em; }
+#autoprover-article th, #autoprover-article td { border: 1px solid #46515a; padding: .7em; text-align: left; vertical-align: top; }
+#autoprover-article th { background: #151e25; }
+#autoprover-article code { overflow-wrap: anywhere; }
+@media (max-width: 600px) {
+  #content { box-sizing: border-box; width: 100%; }
+  #autoprover-article { font-size: 1.05rem; }
+  #autoprover-article details { padding: .65em .75em; }
+}
