@@ -10,6 +10,8 @@ The article supplies the proofs; the finite numerical checks are independent
 checks of the formula implementations used here.
 """
 from itertools import combinations
+from fractions import Fraction
+from functools import cache
 from pathlib import Path
 import math
 
@@ -52,24 +54,45 @@ def grouped_closure(rho):
     return rho + (1 - rho) * (3 * rho**2 - 2 * rho**3)
 
 
-def completion_cost(length, p):
-    """Stable geometric-sum form of the reflected-chain formula."""
-    ratio = (1 - p) / p
-    return sum((length - k) * ratio**k for k in range(length)) / p
+def frontier_cost(depth, weight):
+    """Mean investigations for a finite ancillary tree, with target weight w."""
+    return 1 + sum(2**level / (1 + weight)**(level + 1)
+                   for level in range(depth + 1))
+
+
+def enumerated_frontier_cost(depth, weight):
+    """Independent exact recursion over all possible retained-result sets."""
+    count = 2**(depth + 1) - 1
+
+    @cache
+    def remaining(known):
+        pending = [node for node in range(count)
+                   if not known & (1 << node)
+                   and (node == 0 or known & (1 << ((node - 1) // 2)))]
+        # A target choice stops immediately; each other choice costs one and
+        # exposes a new retained-result set. No candidate is investigated twice.
+        return 1 + sum((remaining(known | (1 << node))
+                        for node in pending), Fraction(0)) / (weight + len(pending))
+
+    return remaining(0)
+
+
+def close_rules(known, rules):
+    known = set(known)
+    while True:
+        previous = len(known)
+        for premises, head in rules:
+            if premises <= known:
+                known.add(head)
+        if len(known) == previous:
+            return known
 
 
 def check_calculations():
-    # Independently solve T = 1 + transition_matrix @ T.
-    for length in (1, 2, 5, 9):
-        for p in (.2, .5, .8):
-            transition = np.zeros((length, length))
-            for state in range(1, length + 1):
-                if state > 1:
-                    transition[state - 1, state - 2] += p
-                transition[state - 1, min(state + 1, length) - 1] += 1 - p
-            numerical = np.linalg.solve(np.eye(length) - transition, np.ones(length))[-1]
-            analytic = completion_cost(length, p)
-            assert math.isclose(numerical, analytic, rel_tol=2e-10), (length, p)
+    # All attainable frontiers are enumerated using exact rational arithmetic.
+    for depth in range(4):
+        for weight in (Fraction(1, 2), Fraction(1), Fraction(2)):
+            assert enumerated_frontier_cost(depth, weight) == frontier_cost(depth, weight)
     # Enumerate actual closure under all twelve rules in a four-object group.
     rules = [(set(pair), head) for head in range(4)
              for pair in combinations([i for i in range(4) if i != head], 2)]
@@ -78,21 +101,27 @@ def check_calculations():
         for mask in range(16):
             known = {i for i in range(4) if mask & (1 << i)}
             count = len(known)
-            changed = True
-            while changed:
-                previous = len(known)
-                for premises, head in rules:
-                    if premises <= known:
-                        known.add(head)
-                changed = len(known) != previous
+            known = close_rules(known, rules)
             expected += rho**count * (1 - rho)**(4 - count) * len(known) / 4
         assert math.isclose(expected, grouped_closure(rho), abs_tol=1e-14)
+    # Check the ring's exact degree counts and closure criterion for every seed
+    # configuration in two finite examples. This supplements the proof.
+    for count in (8, 12):
+        ring_rules = [(set(pair), head) for head in range(count)
+                      for pair in combinations([(head - j) % count for j in (1, 2, 3)], 2)]
+        assert all(sum(head == node for _, head in ring_rules) == 3 for node in range(count))
+        assert all(sum(node in premises for premises, _ in ring_rules) == 6 for node in range(count))
+        for mask in range(1 << count):
+            seeds = {node for node in range(count) if mask & (1 << node)}
+            close_pair = any((node + gap) % count in seeds for node in seeds for gap in (1, 2))
+            closure = close_rules(seeds, ring_rules)
+            assert closure == (set(range(count)) if close_pair else seeds)
     for density in (1.5, 2.0, 3.0):
         values = [least_closure(rho, density) for rho in (.01, .098, .099, .2, .3)]
         assert values == sorted(values)
         for rho, x in zip((.01, .098, .099, .2, .3), values):
             assert math.isclose(x, 1 - (1 - rho) * math.exp(-density * x*x), abs_tol=1e-13)
-    print("Finite-chain, exhaustive group-closure, and fixed-point checks passed.")
+    print("Exact frontier, exhaustive group/ring closure, and fixed-point checks passed.")
 
 
 def save(fig, name):
@@ -139,18 +168,21 @@ def figures():
     save(fig, "knowledge-cascade")
 
     fig, ax = plt.subplots(figsize=(8.4, 5.0), constrained_layout=True)
-    lengths = range(1, 81)
-    for ratio, color, label in (
-        (2, "#23789f", r"$w/b=2$: asymptotically linear"),
-        (1, "#a9740b", r"$w/b=1$: quadratic"),
-        (.5, "#b53a4b", r"$w/b=1/2$: exponential"),
+    depths = range(41)
+    counts = [2**(depth + 1) - 1 for depth in depths]
+    for weight, color, label in (
+        (2, "#23789f", r"$w=2$: bounded mean"),
+        (1, "#a9740b", r"$w=1$: logarithmic in $N$"),
+        (.5, "#b53a4b", r"$w=1/2$: proportional to $N^{0.415\ldots}$ asymptotically"),
     ):
-        p = ratio / (1 + ratio)
-        ax.plot(list(lengths), [completion_cost(length, p) for length in lengths],
+        ax.plot(counts, [frontier_cost(depth, weight) for depth in depths],
                 lw=2.6, color=color, label=label)
-    ax.set(yscale="log", xlim=(1, 80), xlabel=r"Initial progress coordinate, $L$",
-           ylabel=r"Expected reasoning selections, $T_L$")
-    ax.set_title("Guidance changes the scaling of search cost", fontsize=14, loc="left", pad=14)
+    ax.axhline(2, color="#5b6269", lw=1.5, ls="--",
+               label="Initial candidates first: at most 2")
+    ax.set(xscale="log", yscale="log", xlim=(1, counts[-1]),
+           xlabel=r"Number of ancillary candidates, $N$",
+           ylabel="Expected reasoning selections")
+    ax.set_title("A transition created by the search policy", fontsize=14, loc="left", pad=14)
     ax.grid(alpha=.15)
     ax.legend(loc="upper left", frameon=False, fontsize=10)
     save(fig, "guided-search")
