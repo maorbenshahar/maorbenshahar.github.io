@@ -13,13 +13,13 @@ tags: "#lean #math #AI #statistical-mechanics"
 
 <h2 id="setup">Constructions, work, and progress</h2>
 
-<p>Fix a mathematical language and a finite starting library \(K_0\). Let \(V\) be a countable set of theorems, definitions, types, tactics, and intermediate judgments, with their local contexts. A directed hyperedge \(P\to v\) records an elementary construction of \(v\) requiring <em>all</em> premises in \(P\). Alternative edges give alternative constructions. We assume at most two premises per edge and fix a resolution at which proposing one step costs one unit of reasoning; verification costs are neglected.</p>
+<p>Fix a mathematical language and a finite starting library \(K_0\). Let \(V\) be a countable set of theorems, definitions, types, tactics, and intermediate judgments, with their local contexts. A directed hyperedge \(P\to v\) records an elementary construction of \(v\) requiring <em>all</em> premises in the finite set \(P\). Alternative edges give alternative constructions. Each step adds a new verified construction to the library. We model its total cost, including deciding what to construct and verifying it, as one unit.</p>
 
-<p>The current library \(K_t\) retains every verified construction. A valid proposal whose premises are known adds its conclusion; an unsuccessful proposal still costs a unit:</p>
+<p>After \(t\) completed steps, the library is \(K_t\). The next step uses a valid edge \(P\to v\) whose premises are already known and whose conclusion is new, giving</p>
 \[
-K_{t+1}=K_t\cup\{v\}\quad\text{if }P\to v\text{ is valid and }P\subseteq K_t.
+K_{t+1}:=K_t\cup\{v\},\qquad P\subseteq K_t,\quad v\notin K_t.
 \]
-<p>Otherwise \(K_{t+1}=K_t\). Every known node therefore has a construction history from the same core. The <em>closure</em> of \(K_0\) is everything obtainable by finite such histories; the run explores this fixed set. We do not sample arbitrary nodes and declare them known.</p>
+<p>All previous constructions are retained. A step may contribute little to the chosen target while still adding a valid result. Every known node has a construction history from the same core. The <em>closure</em> of \(K_0\) is everything obtainable by finite such histories; the run explores this fixed set.</p>
 
 <p>This includes backward reasoning. A checked construction \(A,B\vdash G\) is a conditional result that can be retained while its premises remain goals. Obtaining \(G\) still requires discharging them. An unresolved hole is not a verified result. We treat an inline construction and a named lemma alike when either can be reused.</p>
 
@@ -31,7 +31,7 @@ U(K)=\sum_{G\in\mathcal T}w_G\,\mathbf 1_{\{G\in K\}}.
 
 <h2 id="efficiency">Distance and efficiency</h2>
 
-<p>For a reachable target \(G\), let \(d(K_0,G)\) be the minimum number of additional elementary constructions needed to obtain it, allowing reuse of intermediate results. A prover \(\pi\) takes a random number \(\tau_{\pi,G}\) of proposals to succeed, set to infinity if it never succeeds. Its mean work and its construction efficiency are</p>
+<p>For a reachable target \(G\), let \(d(K_0,G)\) be the minimum number of additional elementary constructions needed to obtain it, allowing reuse of intermediate results. Let \(\tau_{\pi,G}\) count the completed steps of prover \(\pi\) up to and including its first construction of \(G\), or infinity if it never reaches \(G\). Its mean work and its construction efficiency are</p>
 \[
 W_\pi(G)=\mathbb E[\tau_{\pi,G}],\qquad
 \eta_\pi(G)=\frac{d(K_0,G)}{W_\pi(G)}.
@@ -48,13 +48,13 @@ W_\pi(G)=\mathbb E[\tau_{\pi,G}],\qquad
 \[
 C_\pi(u,\alpha)=\inf\{B:\Pr[U(K_B)\ge u]\ge\alpha\}.
 \]
-<p>This asks for progress \(u\) with probability at least \(\alpha\). It is measurable without knowing the complete hypergraph. Full mean work also depends on the unobserved tail: for integer costs, \(W_\pi(G)=\sum_{t\ge0}[1-F_{\pi,G}(t)]\), since a run costs one unit for every time it has not yet finished.</p>
+<p>This asks for progress \(u\) with probability at least \(\alpha\). It is measurable without knowing the complete hypergraph. Full mean work also depends on the unobserved tail: \(W_\pi(G)=\sum_{t\ge0}[1-F_{\pi,G}(t)]\), counting for each \(t\) the probability that more than \(t\) constructions are needed.</p>
 
 <h2 id="model">A homogeneous model of guidance</h2>
 
 <p>Consider the simplest dependency structure: a complete tree with \(b\ge2\) children per node, truncated at depth \(L\). The root is the fixed known core. Each edge is a valid, unit-cost construction of its child from its parent. Choose the target uniformly among the depth-\(L\) leaves. Every target has the same construction distance \(L\).</p>
 
-<p>The theorem to be proved is specified, but the sequence of constructions that reaches it is unknown. A paid terminal construction reveals whether it proves the target; verification adds no further cost. There is no separate free operation for testing unexplored leaves. Other node descriptions provide no information about the target's location. This is an explicit restriction on what the prover can learn.</p>
+<p>The theorem to be proved is specified, but the sequence of constructions that reaches it is unknown. Constructing a leaf adds a verified result and reveals whether that result is the target. This costs one unit, including verification. Other node descriptions provide no information about the target's location, and unexplored leaves cannot be tested separately for free. This is an explicit restriction on what the prover can learn.</p>
 
 <p>Give the prover a guide that marks promising edges. It always marks the path to the target and independently marks each other edge with probability \(q\). Marks are sampled once and revealed locally when a node is constructed, with the root's marks available initially. Smaller \(q\) means better rejection of unhelpful continuations. The graph and target distribution stay fixed as guidance improves.</p>
 
@@ -140,7 +140,7 @@ L(L+1)/2,&\mu=1.
 q^{m-L}(1-q)^{N-m},
 \]
 <p>independent of which compatible leaf was chosen. At \(q=0\) or \(q=1\), the same conclusion follows directly. Unmarked paths cannot lead to the target, and our observation model supplies no further clues.</p>
-<p>Until success, terminal proposals can only eliminate candidates. Even granting direct unit-cost terminal proposals without paying to construct prerequisites, their expected number is at least \((M_L+1)/2\). Since \(\mathbb E M_L=1+a\sum_{r=0}^{L-1}\mu^r\), every policy that reaches the target in this information model satisfies</p>
+<p>Each constructed leaf yields a verified result. If it is not the target, it eliminates one candidate location. Even granting direct unit-cost leaf constructions without paying to construct prerequisites, finding the target requires at least \((M_L+1)/2\) such constructions in expectation. Since \(\mathbb E M_L=1+a\sum_{r=0}^{L-1}\mu^r\), every policy that reaches the target in this information model satisfies</p>
 \[
 \mathbb E\tau_L\ge
 \max\left\{L,\;1+\frac a2\sum_{r=0}^{L-1}\mu^r\right\}.
@@ -173,11 +173,11 @@ W_L=L+\frac12\sum_{r=0}^{L-1}(L-r)\,aM^r\mathbf 1.
 
 <h2 id="experiments">What could actual prover runs tell us?</h2>
 
-<p>Keep the foundation, starting library, target distribution, and accounting fixed, and vary the prover or its guidance. Record total reasoning work, successful proof constructions, and the success curves. If minimum distances can be computed for small instances, measure \(\eta\) directly. Otherwise, a discovered proof only gives an upper bound on \(d\); it does not establish absolute efficiency. Two provers on the same target can still be compared through their work ratio, since the unknown distance cancels.</p>
+<p>Keep the foundation, starting library, target distribution, and accounting fixed, and vary the prover or its guidance. Record the library additions and when each target is reached; their count measures work in this model. Actual computation costs can be recorded separately to test the equal-cost assumption. If minimum distances can be computed for small instances, measure \(\eta\) directly. Otherwise, a discovered proof only gives an upper bound on \(d\); it does not establish absolute efficiency. Two provers on the same target can still be compared through their work ratio, since the unknown distance cancels.</p>
 
 <p><a href="https://arxiv.org/html/2512.07087v2">Magma equations</a> offer a controlled starting point: terms use one binary operation, while proofs still require choices of substitutions, rewrites, and intermediates. The Equational Theories Project classifies 22,028,942 non-reflexive implication questions among 4,694 short laws using Lean-checked generating proofs and refutations, extended by transitivity and duality. Positive implications provide targets, but their published edges summarize whole proofs; experiments must recover elementary construction histories. Every imported lemma must be derived from the chosen assumptions. Generalization beyond equational reasoning would need further evidence.</p>
 
-<p>The model suggests measuring how long rejected approaches keep generating plausible descendants, and how that changes with guidance. Testing a threshold requires growing problem families and finite-size comparisons, not just a sudden improvement on one benchmark. The parameters \(b,q\), or \(M\), have not been estimated for real provers here. Correlated errors, alternative successful routes, and lemma reuse may change or remove the transition.</p>
+<p>The model suggests measuring how long unhelpful branches keep generating new constructions, and how that changes with guidance. Testing a threshold requires growing problem families and finite-size comparisons, not just a sudden improvement on one benchmark. The parameters \(b,q\), or \(M\), have not been estimated for real provers here. Correlated guidance, alternative routes to the target, and lemma reuse may change or remove the transition.</p>
 
 <h2 id="coldness">How cold is a theorem?</h2>
 

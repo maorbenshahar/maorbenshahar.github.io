@@ -9,8 +9,8 @@ Run: uv run assets/autoprover/search_efficiency.py
 The full b-ary tree has a known root and a target leaf at depth L. A supplied
 guide retains every edge on the target path and independently retains each
 other edge with probability q. Depth-first search orders children uniformly
-and stops when it constructs the target. Work counts newly constructed nodes;
-local use of the supplied guide is included in the unit construction cost.
+and stops when it constructs the target. Every step adds a new verified node.
+Its unit cost models selection, local use of the supplied guide, and verification.
 The known root, navigation, and acquisition of the guide are excluded.
 Every constructed node has an already constructed parent, and is retained.
 
