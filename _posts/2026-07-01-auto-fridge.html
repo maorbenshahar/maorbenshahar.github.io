@@ -2,193 +2,188 @@
 layout: post
 title: "An autoprover as a refrigerator (DRAFT)"
 date: 2026-06-18
-summary: "Libraries built from a fixed core, proof distance, and experiments with magma equations."
+summary: "Work, mathematical progress, and a model with a threshold in prover efficiency."
 tags: "#lean #math #AI #statistical-mechanics"
 ---
 <link rel="stylesheet" href="/assets/autoprover/article.css">
 <article id="autoprover-article">
-<p class="lead">Fix a mathematical language, some known results, and an interesting unproved theorem. Resolve the possible constructions into small, equally expensive steps. What mathematical properties of this network govern the growth of knowledge and the cost of finding a proof?</p>
+<p class="lead">A refrigerator spends work to produce a specified amount of ice in a warm room. An autoprover spends work to obtain specified mathematical results from a library. Can we distinguish the difficulty of that task from the efficiency of the machine, and predict when more computation will produce useful progress?</p>
 
-<h2 id="setup">The hypergraph</h2>
+<p>We first need an operational definition of work and progress. Then we can ask for statistical laws. Below, a deliberately simple model has a transition: improving guidance changes the work needed for distant targets from exponential to linear in their proof distance. The result is proved for that model; whether mathematical proof search exhibits a corresponding transition is an open research question.</p>
 
-<p>Let \(V\) be the countable set of theorems, definitions, types, and intermediate constructions, including their local contexts. A rule \(P\to v\) describes one elementary way to construct a node \(v\) from <em>all</em> the premises in a set \(P\). We call such a rule a directed hyperedge because it can require several premises together. Write \(E\) for the collection of these rules. Assuming at most two premises per rule, our hypergraph is</p>
+<h2 id="setup">Constructions, work, and progress</h2>
+
+<p>Fix a mathematical language and a finite starting library \(K_0\). Let \(V\) be a countable set of theorems, definitions, types, tactics, and intermediate judgments, with their local contexts. A directed hyperedge \(P\to v\) records an elementary construction of \(v\) requiring <em>all</em> premises in \(P\). Alternative edges give alternative constructions. We assume at most two premises per edge and fix a resolution at which proposing one step costs one unit of reasoning; verification costs are neglected.</p>
+
+<p>The current library \(K_t\) retains every verified construction. A valid proposal whose premises are known adds its conclusion; an unsuccessful proposal still costs a unit:</p>
 \[
-\mathcal H=(V,E),\qquad
-E\subseteq\{(P,v):P\subseteq V,\ |P|\le2,\ v\in V\}.
+K_{t+1}=K_t\cup\{v\}\quad\text{if }P\to v\text{ is valid and }P\subseteq K_t.
 \]
-<p>Alternative edges into \(v\) represent alternative constructions. We fix the foundation, available operations, and step resolution; binary prerequisites and unit costs are model assumptions.</p>
+<p>Otherwise \(K_{t+1}=K_t\). Every known node therefore has a construction history from the same core. The <em>closure</em> of \(K_0\) is everything obtainable by finite such histories; the run explores this fixed set. We do not sample arbitrary nodes and declare them known.</p>
 
-<p>A run begins with a fixed finite core \(K_0\) of axioms and library results, and retains what it constructs. Every later known node must have a derivation from that core. Write \(K\) for its current library and \(K_t\) for that library after \(t\) proposals. A successful construction adds its conclusion:</p>
-\[
-K\longmapsto K\cup\{v\}
-\quad\text{when }(P,v)\in E\text{ and }P\subseteq K.
-\]
-<p>Call a finite library <em>admissible</em> if some sequence of these steps builds it from \(K_0\). This requires more than a connection drawn back to the core: every premise of a rule must already be available when its conclusion is added. Randomly marking nodes as known does not ensure this. A statistical model can instead choose a distribution over valid histories, which induces a distribution over their resulting libraries.</p>
+<p>This includes backward reasoning. A checked construction \(A,B\vdash G\) is a conditional result that can be retained while its premises remain goals. Obtaining \(G\) still requires discharging them. An unresolved hole is not a verified result. We treat an inline construction and a named lemma alike when either can be reused.</p>
 
-<p>This models small proof-assistant steps. Writing a tactic inline reaches an intermediate node; naming a lemma records a construction for reuse. We assume useful constructions are retained either way. Tactics themselves can belong to the library. Choosing and proposing a step costs one unit; checking costs are neglected. Failed proposals also cost one unit and leave \(K\) unchanged. The full hypergraph is an idealization, not a map supplied to the prover.</p>
+<p>Initially, progress can mean proving one externally chosen, interesting theorem \(G\). For a broader research objective, choose a finite set of initially unknown targets \(\mathcal T\) and nonnegative values \(w_G\), and count verified achievements:</p>
+\[
+U(K)=\sum_{G\in\mathcal T}w_G\,\mathbf 1_{\{G\in K\}}.
+\]
+<p>This is a chosen measure of output, not a claim that interest follows from difficulty. If targets overlap in value, use a nonadditive utility instead. Fixing the output avoids counting arbitrary restatements as mathematical progress.</p>
 
-<p>For example, from a hypothesis \(h:A\land B\), we can extract a proof of \(A\), extract a proof of \(B\), and combine them to prove \(B\land A\). Counting each extraction and combination as one step gives</p>
-\[
-h\to a:A,\qquad h\to b:B,\qquad
-\{a,b\}\to g:B\land A.
-\]
-<p>The two extractions can be taken in either order, and their results remain available.</p>
+<h2 id="efficiency">Distance and efficiency</h2>
 
-<h2 id="closure">Closure and combining libraries</h2>
+<p>For a reachable target \(G\), let \(d(K_0,G)\) be the minimum number of additional elementary constructions needed to obtain it, allowing reuse of intermediate results. A prover \(\pi\) takes a random number \(\tau_{\pi,G}\) of proposals to succeed, set to infinity if it never succeeds. Its mean work and its construction efficiency are</p>
+\[
+W_\pi(G)=\mathbb E[\tau_{\pi,G}],\qquad
+\eta_\pi(G)=\frac{d(K_0,G)}{W_\pi(G)}.
+\]
+<p>For an initially unknown target and finite mean work, \(0&lt;\eta_\pi(G)\le1\): every successful run contains a construction of \(G\), whose length is at least the minimum. The reciprocal is search overhead. This efficiency credits only the chosen target; other results acquired along the way can be credited through \(U\).</p>
 
-<p>Starting from a library \(K\), let \(F(K)\) add every construction whose premises are already known. Repeating this operation gives everything obtainable from \(K\), its <em>closure</em>. Writing \(F^n\) for \(n\) iterations, with \(F^0(K)=K\), we have</p>
+<p>Here is the first refrigerator-like equation:</p>
 \[
-F(K)=K\cup\{v:\exists(P,v)\in E,\ P\subseteq K\},
-\qquad
-\operatorname{cl}(K)=\bigcup_{n\ge0}F^n(K).
+\boxed{W_\pi(G)=\frac{d(K_0,G)}{\eta_\pi(G)}.}
 \]
-<p>These parallel iterations do not measure serial proof cost. Closure contains the starting library, respects inclusion, and adds nothing further when applied a second time:</p>
-\[
-\begin{gathered}
-K\subseteq\operatorname{cl}(K),\qquad
-K\subseteq L\Rightarrow\operatorname{cl}(K)\subseteq\operatorname{cl}(L),\\
-\operatorname{cl}(\operatorname{cl}(K))=\operatorname{cl}(K),\\
-v\in\operatorname{cl}(K)
-\iff v\text{ has a finite derivation from }K.
-\end{gathered}
-\]
-<p><strong>Proof.</strong> The first two follow by induction on iterations of \(F\). Each rule has finitely many premises, so premises in the union all occur by some finite iteration; the union is therefore closed. Inductively expanding a construction gives a finite derivation, and induction along any finite derivation puts its conclusion in the union. The union of known sets along any schedule that eventually applies every enabled rule is therefore \(\operatorname{cl}(K)\).</p>
+<p>At present it is a definition, not a predictive law. Prediction requires a model for the efficiency. Moreover, \(d\) measures the shortest construction, not the reasoning required to discover it. We will obtain a stronger search lower bound in a specified information model below.</p>
 
-<p>Along a run, \(K_0\subseteq K_t\subseteq\operatorname{cl}(K_0)\), hence</p>
+<p>Repeated runs estimate the success curve \(F_{\pi,G}(B)=\Pr(\tau_{\pi,G}\le B)\). Its inverse gives the budget for a chosen reliability. For general output \(U\), the analogous work requirement is</p>
 \[
-\operatorname{cl}(K_t)=\operatorname{cl}(K_0).
+C_\pi(u,\alpha)=\inf\{B:\Pr[U(K_B)\ge u]\ge\alpha\}.
 \]
-<p>The constructed library grows within a fixed deductive closure.</p>
+<p>This asks for progress \(u\) with probability at least \(\alpha\). It is measurable without knowing the complete hypergraph. Full mean work also depends on the unobserved tail: for integer costs, \(W_\pi(G)=\sum_{t\ge0}[1-F_{\pi,G}(t)]\), since a run costs one unit for every time it has not yet finished.</p>
 
-<p>Two admissible libraries can be combined: first build one, then replay the history of the other, skipping results already present. Their union is still admissible and has the same full closure. What sharing can change is which constructions are available <em>next</em>:</p>
-\[
-F(A)\cup F(B)\subseteq F(A\cup B).
-\]
-<p>This inclusion follows from monotonicity and can be strict. For example, take a common core \(K_0=\{c\}\) and the rules</p>
-\[
-c\to a,\qquad c\to b,\qquad \{a,b\}\to G.
-\]
-<p>The libraries \(A=\{c,a\}\) and \(B=\{c,b\}\) each take one construction to acquire. From either alone, proving \(G\) takes two more steps: construct the missing premise, then combine them. From their union it takes one. In terms of parallel expansion,</p>
-\[
-F(A)=F(B)=\{c,a,b\},\qquad
-F(A\cup B)=\{c,a,b,G\}.
-\]
-<p>All three libraries have the same eventual consequences. In this example, sharing reduces the work still needed to obtain the target.</p>
+<h2 id="model">A homogeneous model of guidance</h2>
 
-<h2 id="distance">Construction distance</h2>
+<p>Consider the simplest dependency structure: a complete tree with \(b\ge2\) children per node, truncated at depth \(L\). The root is the fixed known core. Each edge is a valid, unit-cost construction of its child from its parent. Choose the target uniformly among the depth-\(L\) leaves. Every target has the same construction distance \(L\).</p>
 
-<p>Discoveries leave deductive closure unchanged, but can shorten the remaining construction of a target. Fix a target \(G\) derivable from the initial library \(K_0\). For a current library \(K\supseteq K_0\), define its construction distance \(d(K,G)\) as the fewest further steps needed to obtain \(G\):</p>
-\[
-d(K,G)=\min\{m:G\text{ can be added to }K
-\text{ in }m\text{ elementary steps}\}.
-\]
-<p>Set \(d(K,G)=0\) when \(G\in K\). A derivation may share previously constructed premises between several branches. Consequently this counts constructions in the hypergraph, including that reuse. For \(K\subseteq L\), and for a single allowed addition \(K'=K\cup\{v\}\),</p>
-\[
-\boxed{d(L,G)\le d(K,G),\qquad
-0\le d(K,G)-d(K',G)\le1.}
-\]
-<p><strong>Proof.</strong> Extra knowledge can be ignored, so it cannot increase the minimum. Conversely, prepend the step \(K\to K'\) to a shortest derivation from \(K'\): \(d(K,G)\le1+d(K',G)\).</p>
+<p>The theorem to be proved is specified, but the sequence of constructions that reaches it is unknown. A paid terminal construction reveals whether it proves the target; verification adds no further cost. There is no separate free operation for testing unexplored leaves. Other node descriptions provide no information about the target's location. This is an explicit restriction on what the prover can learn.</p>
 
-<p>Thus unit steps partition into those that decrease this distance by one and those that leave it unchanged. Let \(\tau\) count the proposals up to the first proof of \(G\), so \(\tau=\inf\{t:G\in K_t\}\). A successful run satisfies the exact identity</p>
-\[
-\tau=d(K_0,G)+\#\{\text{steps that leave }d\text{ unchanged}\}.
-\]
-<p>There may be many such steps, even when every construction is valid and retained. This minimum belongs to the fixed hypergraph and step resolution; computing it already requires knowledge of possible proofs. A step that leaves it unchanged can still help discover a route, or serve other targets.</p>
+<p>Give the prover a guide that marks promising edges. It always marks the path to the target and independently marks each other edge with probability \(q\). Marks are sampled once and revealed locally when a node is constructed, with the root's marks available initially. Smaller \(q\) means better rejection of unhelpful continuations. The graph and target distribution stay fixed as guidance improves.</p>
 
-<p><strong>Finite closure bound.</strong> If \(\operatorname{cl}(K_0)\) has \(N\) nodes, a process that keeps adding new enabled nodes reaches \(G\) in at most \(N-|K_0|\) additions. Indeed, before \(G\) is known, the first missing step of a derivation of \(G\) supplies an enabled addition. This bounds successful constructions; locating them may require failed proposals.</p>
+<p>The guide's local use is included in the unit cost; its acquisition or training is outside this experiment. Never discarding the target path is a strong simplifying assumption. At \(q=1\) the guide supplies no information; at \(q=0\) it identifies the proof path exactly.</p>
 
-<h2 id="density-is-not-enough">Library size does not determine remaining work</h2>
+<p>Our prover explores marked children depth first and stops on reaching the target. Child orders are uniform and independent of each other and of the guide. It retains all constructions. Returning attention to a known node incurs no new construction cost. Thus even an unhelpful branch contributes verified nodes connected to the core. This tree is a special case of the hypergraph model, with one prerequisite per construction. Expectations below average over targets, guide marks, and search order.</p>
 
-<p>Consider two chains of elementary constructions starting from the same core node \(c\). Each chain has length \(L\), and the target \(G\) ends the first:</p>
+<h2 id="work-law">A work law</h2>
+
+<p>A node off the target path has an expected \(\mu=bq\) marked children. Each node on the target path has an expected \(a=(b-1)q\) marked children leading away from it. These two quantities combine geometry and guidance.</p>
+
+<p>An off-path branch grows by a factor \(\mu\) per generation in expectation. At depth \(k\), branches could have left the target path at any earlier depth, so their expected total population is \(a\sum_{r=0}^{k-1}\mu^r\). Each such node is explored before the target with probability \(1/2\): at its first divergence from the target path, its branch must come first in the random order. Adding over depths gives the exact mean work</p>
 \[
-\begin{aligned}
-c&\to b_1\to b_2\to\cdots\to b_L=G,\\
-c&\to u_1\to u_2\to\cdots\to u_L.
-\end{aligned}
+\boxed{
+W_L(q)=L+\frac a2\sum_{r=0}^{L-1}(L-r)\mu^r,
+\qquad \mu=bq,\quad a=(b-1)q.
+}
 \]
-<p>There are no other rules. For \(0&lt;m&lt;L\), compare the library \(K_b=\{c,b_1,\ldots,b_m\}\) with \(K_u=\{c,u_1,\ldots,u_m\}\). Both contain \(m+1\) nodes, both took \(m\) constructions to build, and both are connected to the core by valid proofs. Nevertheless,</p>
+<p>The first term constructs the proof. The second pays for other constructions explored before it.</p>
+
+<div class="table-scroll" role="region" aria-label="Search cost regimes" tabindex="0">
+<table>
+<thead><tr><th>Surviving branching</th><th>Mean work as \(L\to\infty\)</th><th>Efficiency \(L/W_L\)</th></tr></thead>
+<tbody>
+<tr><td>\(\mu&lt;1\)</td><td>\(\displaystyle \left(1+\frac{a}{2(1-\mu)}\right)L+O(1)\)</td><td>Positive limit</td></tr>
+<tr><td>\(\mu=1\)</td><td>\(\displaystyle L+\frac a4L(L+1)\)</td><td>Decays as \(1/L\)</td></tr>
+<tr><td>\(\mu&gt;1\)</td><td>\(\Theta(\mu^L)\)</td><td>Decays exponentially, up to a factor \(L\)</td></tr>
+</tbody>
+</table>
+</div>
+
+<p>Thus the limiting efficiency is</p>
 \[
-d(K_b,G)=L-m,\qquad d(K_u,G)=L.
+\eta_\infty(q)=
+\begin{cases}
+\displaystyle\left(1+\frac{(b-1)q}{2(1-bq)}\right)^{-1},&q&lt;1/b,\\[6pt]
+0,&q\ge1/b.
+\end{cases}
 \]
-<p><strong>Proof.</strong> The only way to obtain \(G\) is to finish its chain. The first library has already completed \(m\) of those constructions; the second has completed none. Equal amounts of acquired knowledge can leave very different work for a given target.</p>
+<p>Every finite-\(L\) cost curve is smooth in \(q\). The limit develops a threshold at \(q_c=1/b\), with efficiency rising continuously from zero as guidance improves past it. A random prover still eventually succeeds on each finite tree. Its cost, however, grows exponentially with the distance of the target.</p>
 
 <figure>
-  <a href="/assets/autoprover/connected-libraries.svg" aria-label="Open the two connected libraries at full size">
-    <img src="/assets/autoprover/connected-libraries.svg" width="1180" height="450"
-         alt="The same two-chain graph with two different sets of four known nodes. Knowing the first three nodes of the target chain leaves one construction; knowing the other chain leaves four. Both libraries include their common core."
+  <a href="/assets/autoprover/search-efficiency.svg" aria-label="Open the efficiency and work curves at full size">
+    <img src="/assets/autoprover/search-efficiency.svg" width="1240" height="525"
+         alt="For binary trees, finite-depth efficiency curves approach a limit that vanishes at noise one half. Mean work grows linearly below this threshold, quadratically at it, and exponentially above it."
          loading="lazy">
   </a>
-  <figcaption>Two valid histories in the same graph, with \(L=4\) and \(m=3\). Blue nodes are known. <a href="/assets/autoprover/connected_libraries.py">Reproduce the diagram and finite checks.</a></figcaption>
+  <figcaption>Exact model calculations for \(b=2\), not measurements of an LLM. <a href="/assets/autoprover/search_efficiency.py">Reproduce the curves and exhaustive finite checks.</a></figcaption>
 </figure>
 
-<details id="random-seed-calculation">
-  <summary>What does the four-node formula with \(\rho\) calculate?</summary>
-  <p>This is a different initial-condition model, which does not ensure a history from our fixed core. Divide nodes into groups of four; within each group, any two nodes can produce either remaining node. Now suppose each node is independently supplied as known with probability \(\rho\).</p>
-  <p>Fix one node. It is eventually known in two disjoint cases: it was supplied initially, with probability \(\rho\); or it was not, with probability \(1-\rho\), and at least two of the other three were supplied. Exactly two can be chosen in three ways, giving \(3\rho^2(1-\rho)\); all three have probability \(\rho^3\). Thus its probability of becoming known is</p>
-  \[
-  \begin{aligned}
-  x_{\mathrm{groups}}(\rho)
-  &=\rho+(1-\rho)\bigl[3\rho^2(1-\rho)+\rho^3\bigr]\\
-  &=\rho+(1-\rho)(3\rho^2-2\rho^3).
-  \end{aligned}
-  \]
-  <p>For example, \(\rho=1/2\) gives \(x_{\mathrm{groups}}=3/4\). By symmetry this is also the expected fraction known. The calculation is exact under independent supply, but it does not establish a law for libraries produced by a prover. For those, the distribution of known nodes must come from construction histories.</p>
+<details>
+<summary>Finite-size scaling and typical runs</summary>
+<p>The finite sum follows by differentiating a geometric series:</p>
+\[
+\sum_{r=0}^{L-1}(L-r)\mu^r=
+\begin{cases}
+\displaystyle\frac{\mu^{L+1}-(L+1)\mu+L}{(\mu-1)^2},&\mu\ne1,\\[6pt]
+L(L+1)/2,&\mu=1.
+\end{cases}
+\]
+<p>To examine the transition window, put \(\mu=1+s/L\) for fixed \(s\). Dividing the sum by \(L^2\) gives a Riemann sum converging to</p>
+\[
+\int_0^1(1-x)e^{sx}\,dx=
+\frac{e^s-1-s}{s^2},
+\]
+<p>with value \(1/2\) at \(s=0\). The crossover window therefore has width of order \(1/L\) in \(\mu\).</p>
+<p>The efficiency threshold also holds for typical runs of this prover. Couple the trees along one infinite target path. At level \(j\), let \(X_j(h)\) count the off-path nodes visited before the correct child, including immediate children and at most \(h\) generations below them. These variables increase with \(h\); their limits \(X_j\) are independent and identically distributed along the path. Their mean is \(a/[2(1-\mu)]\) below threshold and infinite at or above it.</p>
+<p>The finite run satisfies \(\tau_L=L+\sum_{j=0}^{L-1}X_j(L-j-1)\). For any fixed \(h\), bound all but the last \(h\) summands below by \(X_j(h)\) and apply the law of large numbers. Then let \(h\to\infty\). Below threshold, bounding above by \(\sum_{j&lt;L}X_j\) gives the matching limit. Consequently, almost surely,</p>
+\[
+\frac{\tau_L}{L}\longrightarrow
+\begin{cases}
+\displaystyle1+\frac a{2(1-\mu)},&\mu&lt;1,\\[5pt]
+\infty,&\mu\ge1.
+\end{cases}
+\]
+<p>For this policy, a budget proportional to proof distance can therefore give high reliability below threshold; every fixed proportional budget fails with probability tending to one at or above it.</p>
 </details>
-
-<h2 id="percolation">Percolation and finite observations</h2>
-
-<p>Percolation can also start from a fixed core: explore outward from a chosen origin along available edges. Every discovered node is then connected to that origin. Its phase transition varies the random availability of edges across models. It does not come from repeatedly deriving consequences in one fixed, fully available graph.</p>
-
-<p>Our closure operation is related to <a href="https://dmtcs.episciences.org/578">directed-hypergraph propagation</a>, with all premises of a rule required together. Relating a percolation parameter to a prover would need a model of which constructions it can discover. We have not supplied such a model.</p>
-
-<p>For comparison, ordinary bond percolation keeps each edge of a graph independently with probability \(p\). Suppose the graph \(\Gamma\) is infinite, connected, locally finite, and vertex-transitive. Fix a starting vertex \(o\), and let \(B_R\) contain the vertices within distance \(R\) of it. We compare the probability \(q_R(p)\) of an open path leaving this finite ball with the probability \(\theta(p)\) of connection to infinity:</p>
-\[
-q_R(p)=\Pr_p(o\text{ connects to the boundary of }B_R),
-\qquad \theta(p)=\Pr_p(o\leftrightarrow\infty).
-\]
-<p>Reaching the boundary means crossing an edge leaving the ball. The critical probability \(p_c=\inf\{p:\theta(p)&gt;0\}\) marks the onset of a positive chance of connection to infinity. The sharpness bounds hold with some \(c=c(p,\Gamma)&gt;0\):</p>
-\[
-\begin{array}{ll}
-p&lt;p_c:&q_R(p)\le e^{-cR},\\
-p&gt;p_c:&0\le q_R(p)-\theta(p)\le e^{-cR}.
-\end{array}
-\]
-<p>The supercritical bound is <a href="https://arxiv.org/html/2603.03257v1">Diskin and collaborators, Theorem 1 (2026)</a>; the subcritical bound is classical. These concern complete finite balls of a specified random graph. Applying them to proof hypergraphs would require a corresponding theorem: countability and equal costs do not supply independence, symmetry, or ordinary connectivity. An arbitrary prover trace need not expose a complete ball. Sharpness also does not mean the order parameter must jump discontinuously.</p>
-
-<h2 id="magma-equations">Magma equations as a testing ground</h2>
-
-<p>A magma is a set with one binary operation \(\star\), with no laws assumed initially. An equational law is an identity required to hold for every assignment of its variables, such as associativity, \((x\star y)\star z=x\star(y\star z)\). A proof task fixes some laws \(T\) as assumptions and asks whether another equation follows in every magma satisfying \(T\).</p>
-
-<p>This gives us a controlled setting for algebraic proof search. Terms have a simple syntax, but the prover must still choose substitutions, rewrite locations, and intermediate equations. Equational reasoning is complete for these positive implication questions: every valid implication has a finite derivation using equality rules and substitution. <a href="https://arxiv.org/html/2512.07087v2#S1.SS1">The Equational Theories Project paper</a> explains this connection and why short equations can require difficult proofs.</p>
-
-<p>The <a href="https://github.com/teorth/equational_theories">project's corpus</a> already classifies all 22,028,942 non-reflexive implication questions among 4,694 laws with at most four operation occurrences, with Lean-checked proofs or refutations. This gives evaluation answers without giving us every proof route or its minimum cost. The published implication edges usually summarize whole proofs; they are not our elementary hyperedges.</p>
-
-<p>A first experiment could fix \(T\), choose known positive implications as targets, and compare provers with explicitly restricted libraries. Every added lemma must come with a derivation from the same \(T\); importing an arbitrary magma law would change the problem. Library variants can be prefixes of recorded valid runs. Measure library construction and subsequent target search separately, counting failed proposals as well as the final proof length. The project's <a href="https://teorth.github.io/equational_theories/blueprint/vampire-chapter.html">Vampire workflow</a> provides a starting point for classical automation and Lean reconstruction.</p>
-
-<p>This would test rewriting, guidance, and lemma reuse. It would not by itself establish statistical laws for mathematics generally: the experiment fixes the language and types, and positive equational proving does not test all the choices involved in developing new definitions or constructing counterexamples. Generalization would require comparisons with other domains. No prover runs for this experiment are reported here.</p>
 
 <details>
-  <summary>A finite sequence of graphs that preserves the fixed core</summary>
-  <p>Fix an elementary equational calculus. Bound term size and the available variable names to obtain finite equation sets \(V_n\), increasing to cover every equation. Keep the inference edges entirely within each set, giving nested finite hypergraphs \(\mathcal H_n\). Begin after the core, target, and full history of the starting library \(K\) all fit.</p>
-  <p>Let \(d_n(K,G)\) be the shortest construction within \(\mathcal H_n\), or infinity if there is none. Enlarging the graph preserves old routes, so</p>
-  \[
-  d_{n+1}(K,G)\le d_n(K,G).
-  \]
-  <p>If the unrestricted minimum \(d(K,G)\) is finite, an optimal proof uses finitely many equations and eventually fits inside one \(\mathcal H_n\). From that point onward, \(d_n(K,G)=d(K,G)\). This proves eventual agreement, without telling us when that point has been reached. Small finite graphs could therefore support exact comparisons with search policies.</p>
-  <p>For fixed \(K,G\), this minimum eventually stops changing. To study nontrivial scaling, we would need a growing family of targets, or a specified policy whose search effort is measured as more options become available. Whether such experiments exhibit thresholds remains a research question.</p>
+<summary>Could a better search order remove the exponential regime?</summary>
+<p>Let \(M_L\) be the number of depth-\(L\) leaves whose entire paths are marked. Even if a prover receives every mark for free, the target is uniform among these leaves. To see this, suppose there are \(N\) edges in the full tree and \(m\) marked edges. Given any compatible target leaf, the likelihood of this marking is</p>
+\[
+q^{m-L}(1-q)^{N-m},
+\]
+<p>independent of which compatible leaf was chosen. At \(q=0\) or \(q=1\), the same conclusion follows directly. Unmarked paths cannot lead to the target, and our observation model supplies no further clues.</p>
+<p>Until success, terminal proposals can only eliminate candidates. Even granting direct unit-cost terminal proposals without paying to construct prerequisites, their expected number is at least \((M_L+1)/2\). Since \(\mathbb E M_L=1+a\sum_{r=0}^{L-1}\mu^r\), every policy that reaches the target in this information model satisfies</p>
+\[
+\mathbb E\tau_L\ge
+\max\left\{L,\;1+\frac a2\sum_{r=0}^{L-1}\mu^r\right\}.
+\]
+<p>Let \(W_L^*(q)\) be the infimum of mean work over policies chosen before the random target and guide are sampled. Combining this lower bound with our prover's upper bound proves</p>
+\[
+\lim_{L\to\infty}\frac{\log W_L^*(q)}{L}
+=\max\{0,\log(bq)\},\qquad q&gt;0.
+\]
+<p>Optimal mean work is linear below threshold and exponential above it. At criticality these bounds leave a gap between linear and quadratic: we have proved quadratic cost only for the specified depth-first prover. These are search bounds under the stated information restriction, not lower bounds for a prover with additional mathematical insight.</p>
 </details>
 
-<h2 id="research">What might a prover exploit?</h2>
+<h2 id="geometry">What properties of the closure matter?</h2>
 
-<p>The graph supplies joint prerequisites, shared intermediates, and dependency bottlenecks. A prover must select steps without knowing their full consequences. Humans and autoprovers nevertheless seem to have a sense of direction: we simplify a goal, introduce a construction, or choose a promising lemma before possessing the completed proof.</p>
+<p>In this model, \(b\) describes local growth of the closure, while \(q\) describes the guide. Their product controls whether unhelpful search branches die out quickly or proliferate. A denser supply of alternatives requires stronger discrimination. Global node density alone does not specify this growth.</p>
 
-<p>The distance above gives one precise interpretation. Let \(p_t\) be the conditional probability that the next proposal decreases \(d(K_t,G)\), given the entire run so far. If \(p_t\ge\varepsilon&gt;0\) until success, then</p>
+<p>We can make the result parametric in more structure. Suppose branches have finitely many kinds. Let \(B_{ij}\) be the mean number of children of kind \(j\) produced by a node of kind \(i\). Conditional on these children, the guide independently retains each with probability \(Q_{ij}\). The mean surviving offspring matrix is \(M_{ij}=B_{ij}Q_{ij}\). With independent branching, disjoint descendants, and the mixing condition below, the role of \(bq\) is played by the largest eigenvalue of \(M\).</p>
+
+<details>
+<summary>Conditions and derivation for several kinds of branch</summary>
+<p>Assume the expected row vector of marked off-path children is the same nonzero vector \(a\) at each target-path node. Descendants reproduce independently according to their kind, with mean matrix \(M\). Random sibling order is independent of descendants. Counting generations as above gives</p>
 \[
-\mathbb E[\tau]\le\frac{d(K_0,G)}{\varepsilon}.
+W_L=L+\frac12\sum_{r=0}^{L-1}(L-r)\,aM^r\mathbf 1.
 \]
-<p><strong>Proof.</strong> With \(T_n=\min(\tau,n)\), expected accumulated decreases are at least \(\varepsilon\mathbb E[T_n]\) and at most \(d(K_0,G)\). Let \(n\to\infty\). No independence of successive choices is needed. For uniform selection from a finite candidate set, \(p_t\) is simply its fraction of distance-decreasing moves.</p>
+<p>Assume \(M\) is primitive: some power has all entries positive. If \(\gamma\) is its largest eigenvalue, Perron–Frobenius theory gives \(aM^r\mathbf1\sim c\gamma^r\) for a constant \(c&gt;0\). Substitution into the sum proves linear, quadratic, or exponential mean work according as \(\gamma&lt;1\), \(\gamma=1\), or \(\gamma&gt;1\). Below threshold the efficiency denominator tends to \(1+\tfrac12a(I-M)^{-1}\mathbf1\).</p>
+<p>The structural assumptions matter. For instance, with \(a=(1,0)\) and \(M=\left(\begin{smallmatrix}1&amp;1\\0&amp;1\end{smallmatrix}\right)\), we have \(aM^r\mathbf1=r+1\). The same exact formula gives \(W_L=L+L(L+1)(L+2)/12\): cubic cost at eigenvalue one. This matrix is not primitive. Merging branches, shared lemmas, and joint prerequisites require further models.</p>
+</details>
 
-<p>Can recognizable features of the hypergraph predict those moves? Does useful direction come from simulating short continuations, learned structural regularities, or both? Can properties measured along valid construction histories predict the cost of reaching other targets? These are research questions; the formulas above do not supply that prediction.</p>
+<p>This is a branching-process connection to percolation: guidance thins possible continuations, and a reproduction threshold governs their growth. Related search transitions under a different noise model are proved by <a href="https://arxiv.org/abs/1611.01403">Boczkowski, Feige, Korman, and Rodeh</a>. The recent <a href="https://arxiv.org/html/2603.03257v1">supercritical sharpness theorem</a> concerns independent bond percolation on transitive graphs; it does not establish a threshold for proof hypergraphs. The work laws above follow from the stated search model.</p>
 
-<p>The refrigerator analogy asks for a resource law for reaching a desired state. We have specified a unit of reasoning cost and exhibited structural and statistical laws. Relating them to physical work or a mathematical notion of entropy remains to be done.</p>
+<h2 id="experiments">What could actual prover runs tell us?</h2>
+
+<p>Keep the foundation, starting library, target distribution, and accounting fixed, and vary the prover or its guidance. Record total reasoning work, successful proof constructions, and the success curves. If minimum distances can be computed for small instances, measure \(\eta\) directly. Otherwise, a discovered proof only gives an upper bound on \(d\); it does not establish absolute efficiency. Two provers on the same target can still be compared through their work ratio, since the unknown distance cancels.</p>
+
+<p><a href="https://arxiv.org/html/2512.07087v2">Magma equations</a> offer a controlled starting point: terms use one binary operation, while proofs still require choices of substitutions, rewrites, and intermediates. The Equational Theories Project classifies 22,028,942 non-reflexive implication questions among 4,694 short laws using Lean-checked generating proofs and refutations, extended by transitivity and duality. Positive implications provide targets, but their published edges summarize whole proofs; experiments must recover elementary construction histories. Every imported lemma must be derived from the chosen assumptions. Generalization beyond equational reasoning would need further evidence.</p>
+
+<p>The model suggests measuring how long rejected approaches keep generating plausible descendants, and how that changes with guidance. Testing a threshold requires growing problem families and finite-size comparisons, not just a sudden improvement on one benchmark. The parameters \(b,q\), or \(M\), have not been estimated for real provers here. Correlated errors, alternative successful routes, and lemma reuse may change or remove the transition.</p>
+
+<h2 id="coldness">How cold is a theorem?</h2>
+
+<p>There are now three distinct quantities: the chosen value of the result, its minimum construction distance from our library, and the work needed to discover a construction under specified prior information. In the model, every target has distance \(L\), yet improving guidance changes the required work from exponential to linear. Search cost therefore cannot be assigned to the theorem alone without fixing the prover's information and capabilities.</p>
+
+<p>The operational analogue of the refrigerator question is \(C_\pi(u,\alpha)\): how much work buys the desired output, at the desired reliability? The distance gives one lower bound; an information model can supply stronger ones. Calling one of these quantities a temperature would require additional structure. We have not derived an entropy, an absolute efficiency limit for mathematical reasoning, or a conversion from reasoning units to joules.</p>
+
+<p>The concrete research question is whether a few measurable properties of mathematical dependency graphs and prover guidance predict these work curves. The branching model demonstrates one possible mechanism and an exact transition. Extending it to proof hypergraphs, and deciding whether it describes actual autoprovers, remains to be done.</p>
 </article>
