@@ -10,8 +10,6 @@ The article supplies the proofs; the finite numerical checks are independent
 checks of the formula implementations used here.
 """
 from itertools import combinations
-from fractions import Fraction
-from functools import cache
 from pathlib import Path
 import math
 
@@ -54,29 +52,6 @@ def grouped_closure(rho):
     return rho + (1 - rho) * (3 * rho**2 - 2 * rho**3)
 
 
-def frontier_cost(depth, weight):
-    """Mean investigations for a finite ancillary tree, with target weight w."""
-    return 1 + sum(2**level / (1 + weight)**(level + 1)
-                   for level in range(depth + 1))
-
-
-def enumerated_frontier_cost(depth, weight):
-    """Independent exact recursion over all possible retained-result sets."""
-    count = 2**(depth + 1) - 1
-
-    @cache
-    def remaining(known):
-        pending = [node for node in range(count)
-                   if not known & (1 << node)
-                   and (node == 0 or known & (1 << ((node - 1) // 2)))]
-        # A target choice stops immediately; each other choice costs one and
-        # exposes a new retained-result set. No candidate is investigated twice.
-        return 1 + sum((remaining(known | (1 << node))
-                        for node in pending), Fraction(0)) / (weight + len(pending))
-
-    return remaining(0)
-
-
 def close_rules(known, rules):
     known = set(known)
     while True:
@@ -89,10 +64,6 @@ def close_rules(known, rules):
 
 
 def check_calculations():
-    # All attainable frontiers are enumerated using exact rational arithmetic.
-    for depth in range(4):
-        for weight in (Fraction(1, 2), Fraction(1), Fraction(2)):
-            assert enumerated_frontier_cost(depth, weight) == frontier_cost(depth, weight)
     # Enumerate actual closure under all twelve rules in a four-object group.
     rules = [(set(pair), head) for head in range(4)
              for pair in combinations([i for i in range(4) if i != head], 2)]
@@ -121,7 +92,7 @@ def check_calculations():
         assert values == sorted(values)
         for rho, x in zip((.01, .098, .099, .2, .3), values):
             assert math.isclose(x, 1 - (1 - rho) * math.exp(-density * x*x), abs_tol=1e-13)
-    print("Exact frontier, exhaustive group/ring closure, and fixed-point checks passed.")
+    print("Exhaustive group/ring closure and fixed-point checks passed.")
 
 
 def save(fig, name):
@@ -161,31 +132,12 @@ def figures():
     ax.plot(rhos, [grouped_closure(r) for r in rhos],
             color="#5b6269", lw=2, ls="--", label=r"Four-object groups ($\lambda = 3$)")
     ax.set(xlim=(0, .3), ylim=(0, 1), xlabel=r"Initially supplied fraction, $\rho$",
-           ylabel=r"Fraction in the easy closure, $x$")
+           ylabel=r"Fraction in the closure, $x$")
     ax.set_title("Accessible knowledge in two dependency ensembles", fontsize=14, loc="left", pad=14)
     ax.grid(alpha=.15)
     ax.legend(loc="lower right", frameon=False, fontsize=10)
     save(fig, "knowledge-cascade")
 
-    fig, ax = plt.subplots(figsize=(8.4, 5.0), constrained_layout=True)
-    depths = range(41)
-    counts = [2**(depth + 1) - 1 for depth in depths]
-    for weight, color, label in (
-        (2, "#23789f", r"$w=2$: bounded mean"),
-        (1, "#a9740b", r"$w=1$: logarithmic in $N$"),
-        (.5, "#b53a4b", r"$w=1/2$: proportional to $N^{0.415\ldots}$ asymptotically"),
-    ):
-        ax.plot(counts, [frontier_cost(depth, weight) for depth in depths],
-                lw=2.6, color=color, label=label)
-    ax.axhline(2, color="#5b6269", lw=1.5, ls="--",
-               label="Initial candidates first: at most 2")
-    ax.set(xscale="log", yscale="log", xlim=(1, counts[-1]),
-           xlabel=r"Number of ancillary candidates, $N$",
-           ylabel="Expected reasoning selections")
-    ax.set_title("A transition created by the search policy", fontsize=14, loc="left", pad=14)
-    ax.grid(alpha=.15)
-    ax.legend(loc="upper left", frameon=False, fontsize=10)
-    save(fig, "guided-search")
 
 
 if __name__ == "__main__":
@@ -194,6 +146,6 @@ if __name__ == "__main__":
     print(f"Critical seed density at lambda=3: {seed_density(fold, 3):.10f}")
     for rho in (.098, .099):
         x = least_closure(rho, 3)
-        print(f"rho={rho}: closure={x:.8f}, unknown-target probability={(x-rho)/(1-rho):.8f}")
+        print(f"rho={rho}: closure={x:.8f}")
     figures()
     print(f"Figures written to {OUTPUT}")

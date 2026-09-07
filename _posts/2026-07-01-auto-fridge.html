@@ -2,875 +2,183 @@
 layout: post
 title: "An autoprover as a refrigerator (DRAFT)"
 date: 2026-06-18
-summary: "What proof-search models can establish, and the counterexamples that limit them."
+summary: "Closure, geometry, and phase transitions in a hypergraph of elementary proof steps."
 tags: "#lean #math #AI #statistical-mechanics"
 ---
 <link rel="stylesheet" href="/assets/autoprover/article.css">
 <article id="autoprover-article">
-<p class="draft-note">Working draft. The model calculations below have proofs or an explicit reference to a proved result. Their applicability to mathematical research remains an open question. No measurements of an actual autoprover are reported here.</p>
+<p class="lead">Fix a mathematical language, some known results, and an interesting unproved theorem. Resolve the possible constructions into small, equally expensive steps. What mathematical properties of this network govern the growth of knowledge and the cost of finding a proof?</p>
 
-<p class="lead">A refrigerator spends work to maintain something we want: a cold interior in a warmer world. An automatic theorem prover also spends a resource to reach a desired state: a particular theorem has been proved, and the constructions needed along the way have joined its library. Can the second process admit a theory of cost, efficiency, and transitions comparable to the first?</p>
+<h2 id="setup">The hypergraph</h2>
 
-<p>I want to start with the cost of thinking. Given a mathematical setup and an interesting target, how much reasoning does it take to find a proof? There may be many acceptable moves and very few productive routes. New definitions, types, lemmas, and tactics may be essential parts of the route. The goal is to learn something about this process without possessing a map of every possible proof.</p>
-
-<nav class="article-contents" aria-label="In this article">
-  <strong>In this article</strong>
-  <ol>
-    <li><a href="#fridge">What the refrigerator comparison asks for</a></li>
-    <li><a href="#setup">The mathematical setup and the cost of reasoning</a></li>
-    <li><a href="#accounting-interface">What counts as reasoning?</a></li>
-    <li><a href="#verification-only-bridge">A bound with explicit prior information</a></li>
-    <li><a href="#branching-and-guidance">A transition created by a search policy</a></li>
-    <li><a href="#knowledge-cascades">A threshold in easy accessibility</a></li>
-    <li><a href="#density-is-not-enough">Why matching dependency degrees is insufficient</a></li>
-    <li><a href="#search-information">Search information and a free-energy identity</a></li>
-    <li><a href="#research">What could be learned from actual runs?</a></li>
-  </ol>
-</nav>
-
-<h2 id="fridge">What a refrigerator gives us</h2>
-
-<p>For an idealized cyclic refrigerator, let \(Q_c&gt;0\) be heat removed from a reservoir at temperature \(T_c\), and \(Q_h\) the heat delivered to a hotter reservoir at \(T_h&gt;T_c&gt;0\). Temperatures are absolute. Energy conservation and the second law give</p>
 \[
-W=Q_h-Q_c,\qquad
-\frac{Q_h}{T_h}-\frac{Q_c}{T_c}\ge0.
+\mathcal H=(V,E),\qquad
+E\subseteq\{(P,v):P\subseteq V,\ |P|\le2,\ v\in V\}.
 \]
-<p>The machine returns to its initial state each cycle, so the two reservoirs supply the net entropy change. Substituting the entropy inequality into energy conservation yields</p>
+<p>The countable set \(V\) contains theorems, definitions, types, and intermediate constructions, including their local contexts. A hyperedge \(P\to v\) is one elementary way to construct \(v\) from <em>all</em> the premises in \(P\). Alternative edges into \(v\) represent alternative constructions. We fix the foundation, available operations, and step resolution; binary prerequisites and unit costs are model assumptions.</p>
+
+<p>A run begins with a finite library \(K_0\) and retains what it constructs:</p>
 \[
-\boxed{W\ge Q_c\left(\frac{T_h}{T_c}-1\right).}
+K\longmapsto K\cup\{v\}
+\quad\text{when }(P,v)\in E\text{ and }P\subseteq K.
 \]
-<p>This lower bound holds under the stated reservoir and cyclic-operation assumptions. It does not require knowing every microscopic trajectory through the machine. Equality would require a reversible cycle.</p>
+<p>This models small proof-assistant steps. Writing a tactic inline reaches an intermediate node; naming a lemma records a construction for reuse. We assume useful constructions are retained either way. Tactics themselves can belong to the library. Choosing and proposing a step costs one unit; checking costs are neglected. Failed proposals also cost one unit and leave \(K\) unchanged. The full hypergraph is an idealization, not a map supplied to the prover.</p>
 
-<p>The corresponding question for a prover is appealing: given the desired mathematical result, what expenditure is unavoidable? We do not yet have counterparts of reservoir temperature or heat extracted. Nor does a newly proved theorem automatically define a decrease in physical entropy. The models below build some of the statistical structure first: search trajectories, cumulative knowledge, response to additional ingredients, and asymptotic cost. A literal energy bound would require an additional account of the physical computation.</p>
-
-<h2 id="setup">What is the system?</h2>
-
-<p>Fix the foundational rules, an initial library \(K_0\), and a target \(G\) that is derivable in this setup. Its interest is given. The library contains definitions and types as well as theorems, and reusable tactics as well as their outputs. A useful intermediate result counts as retained knowledge even if its proof first appeared inside a larger proof.</p>
-
-<p>Imagine a directed hypergraph of constructions. A hyperedge \(\{A,B\}\to C\) records one way to construct \(C\) using \(A\) and \(B\); other edges may give other constructions of \(C\). The nodes carry their contexts and encodings. For example, a subgoal with local hypotheses must retain those hypotheses. A new definition is a construction made in the current setup, not permission to add an arbitrary axiom. We stipulate that each allowed construction respects the fixed foundation.</p>
-
-<p>To include tactics, some dependencies are procedural: certain resources make a proof-producing procedure available. When the procedure is used, its output is checked by the proof assistant. The abstract graph describes both what can be constructed and which reusable tools are available for constructing it.</p>
-
-<p>The complete graph is an analyst's idealization. The prover is given its starting resources and ways to search for further constructions. It is not given every future useful hyperedge. We can also describe a run by its successive configurations, including its accumulated library and working memory. The construction hypergraph records dependencies; successive configurations record the actual search, including unsuccessful attempts.</p>
-
-<section id="accounting-interface">
-  <h2>What counts as reasoning?</h2>
-
-  <p>We fix an interface for each comparison: the routine operations available to the prover, their permitted inputs and rewrite environments, the information returned by them, and which choices incur reasoning cost. For the workload under study, we idealize checking already constructed certificates and designated uses of operations such as <code>ring</code> and <code>simp</code> as free. Their routine algebra is outside the cost we are trying to understand. Generating candidates, selecting premises, and exploring approaches are charged according to the stated search model.</p>
-
-  <p>The restriction to designated routines matters. In a system with an effectively enumerable certificate language and a terminating checker, a single deterministic tactic could enumerate candidate proofs in length order and check each one. A finite proof of the derivable target would eventually be reached. If every deterministic tactic were free to execute, selecting this one tactic would make every target cost one reasoning step. Packaging search inside a tactic must not, by itself, exempt that search from the accounting.</p>
-  <p>Restricting routine names alone would not close this loophole: a definition can encode a bounded search and have it evaluated through a simplifier or reduction. Such a computation does not become a permitted free call merely by using a familiar tactic name. The allowed inputs and reductions, and the workload on which their cost is neglected, are part of the approximation.</p>
-
-  <p>A new tactic can still be an important discovery. Its construction and subsequent use need an explicit cost convention. We can analyze it within the existing interface, or compare two explicitly different interfaces. The point is to keep routine algebra out of the present model while preventing unrestricted proof search from being declared routine. No claim of invariance under every possible change of implementation is intended.</p>
-
-  <p>A lower bound across provers also needs a restriction on their prior resources, or an explicit bound on problem-dependent advice. For any single derivable theorem, a policy with its proof already embedded can return that proof without discovering it online. Merely optimizing over computable policies does not exclude this possibility. We can fix a particular prover, or fix a policy class and its available prior information before sampling problems. Either comparison must say what the prover already knows and what acquiring that knowledge costs.</p>
-</section>
-<p>Splitting a proof into tactic-sized obligations gives a possible resolution of the graph. It does not make all choices equally hard, and it is not a canonical splitting.</p>
-
-<details>
-  <summary>What does the equal-cost simplification preserve?</summary>
-  <p>Let a run make \(\tau\) reasoning selections, and let selection \(i\) cost \(c_i\). If \(0&lt;c_-\le c_i\le c_+&lt;\infty\), with the same bounds at every problem size, then path by path</p>
-  \[
-  c_-\tau\le C=\sum_{i=1}^{\tau}c_i\le c_+\tau.
-  \]
-  <p>Taking expectations gives the same inequalities for expected cost, including infinite expectations. Thus bounded variation preserves linear, quadratic, or exponential order of growth, and preserves whether the mean is finite. This compares the same search policy and trajectories. It does not cover a change of tactics that alters the graph, or a stronger guide whose cost grows without bound with problem size.</p>
-</details>
-
-<p>Each model below fixes its own dynamics and, where needed, an ensemble of graphs. A large-system limit means a specified sequence of increasingly large problems. A graph alone does not determine reasoning cost: we must also say how the prover finds and selects its moves.</p>
-
-
-<section id="verification-only-bridge">
-  <h2>A restricted connection between knowledge and search work</h2>
-
-  <p>Here is a setting where prior information and expected reasoning expenditure have an operational relationship. There are \(M\) candidate constructions and exactly one succeeds. Its hidden identity \(J\) is uniform among them. Apart from advice supplied initially, the prover learns only success or failure when it submits a candidate. Each submission costs one selection; checking it is free. The prover must eventually produce a verified successful construction.</p>
-
-  <p>Fix a deterministic advice scheme \(Z=f(J)\), partitioning the candidates into \(K\) nonempty groups of sizes \(s_1,\ldots,s_K\), where \(\sum_zs_z=M\). Receiving \(Z=z\) identifies the group containing the successful candidate. The scheme and the group's candidate list are supplied resources, so the prover can enumerate that list at one charged selection per submission. Constructing the advice is outside the online cost being studied. Candidate descriptions convey no additional information; a failed check reveals only that the submitted candidate is not successful.</p>
-
-  <p>The minimum expected online expenditure is exactly</p>
-  \[
-    \boxed{\mathbb E[C]_{\mathrm{opt}}
-      =\frac12+\frac{1}{2M}\sum_{z=1}^{K}s_z^2
-      \ge\frac12+\frac{M}{2K}.}
-  \]
-  <p>Balanced advice groups attain the lower bound when \(K\) divides \(M\). Without advice, \(K=1\), giving \((M+1)/2\) expected selections. If the advice uses at most \(b\) fixed binary positions, it has at most \(2^b\) messages, and consequently</p>
-  \[
-    \mathbb E[C]_{\mathrm{opt}}\ge\frac12+\frac{M}{2^{b+1}}.
-  \]
-  <p>This is a bound on the number of submissions in a particular information model. It does not price the creation of the advice or identify an arbitrary library with a fixed number of informative bits.</p>
-
-  <details>
-    <summary>Proof of the expected-cost formula</summary>
-    <p>Conditional on \(Z=z\), the successful candidate is uniform among the \(s_z\) members of that group. A failed check excludes only the submitted candidate. An optimal policy need not submit candidates outside that group or repeat a failed candidate. Once any independent private randomness is fixed, following the all-failure transcript therefore determines an ordering of the group's candidates, and the successful candidate's position in that ordering is uniform. Its mean position is \((s_z+1)/2\), attained by any ordering without repetitions. A final candidate identified by elimination still needs its charged submission to complete the verified construction.</p>
-    <p>Since \(\Pr(Z=z)=s_z/M\), averaging these conditional means gives</p>
-    \[
-      \mathbb E[C]_{\mathrm{opt}}
-      =\sum_{z=1}^{K}\frac{s_z}{M}\frac{s_z+1}{2}
-      =\frac12+\frac{1}{2M}\sum_{z=1}^{K}s_z^2.
-    \]
-    <p>Cauchy–Schwarz gives \(M^2=(\sum_zs_z)^2\le K\sum_zs_z^2\), proving the bound. Equality holds exactly when all group sizes are equal. Randomizing the testing order cannot improve a conditional mean that is already the same for every order. The fixed-length bit bound follows from \(K\le2^b\).</p>
-  </details>
-
-  <p>This theorem concerns search using only verification feedback. A prover that extracts useful information from the mathematical statement or from failed attempts receives more than this model allows. It is not a lower bound on arbitrary theorem proving. Its usefulness is to state precisely what prior knowledge and structured reasoning must change to outperform blind candidate testing.</p>
-</section>
-
-<section id="branching-and-guidance">
-  <h2>A search policy can create its own transition</h2>
-
-  <p>Remembering every completed construction does not by itself prevent expensive
-  search. A prover can keep discovering different things while an available route
-  to its target receives too little attention. The following model isolates that
-  scheduling effect. It will also give a counterexample to treating its transition
-  as an unavoidable difficulty of the mathematical problem.</p>
-
-  <p>Initially there are two pending candidate constructions. One will produce a
-  proof of the target when investigated. The other will produce an ancillary
-  result and expose two new candidates. Each of those candidates behaves in the
-  same way. Thus the ancillary candidates form a binary tree. Their results are
-  verified and retained, and each candidate is investigated at most once. In this
-  model their descendants do not prove the chosen target. A candidate's outcome
-  is revealed only when it is investigated.</p>
-
-  <p><strong>A counterpolicy already solves every such problem in at most two
-  selections:</strong> investigate both initial candidates before any newly
-  exposed descendants. One of those two produces the target by construction.
-  Its identity need not be known in advance. The result below concerns a different
-  policy that can have an infinite mean on these same problems.</p>
-
-  <p>A scheduler may choose any pending candidate. Specify one stochastic guide
-  through its selection probabilities. When
-  \(F\) ancillary candidates are pending, it chooses the target-producing
-  candidate with probability \(w/(w+F)\), where \(w&gt;0\), and each other
-  candidate with probability \(1/(w+F)\). The designation of the successful
-  candidate is part of the analyst's description, not an extra input revealing
-  its identity to the scheduler. At \(w=1\), this is simply uniform sampling
-  from the pending frontier. Other values assume a guide with the specified
-  outcome-correlated probabilities; we have not derived such a guide or its cost.
-  This is an additional predictive capability, beyond the verification-only
-  interface of the preceding model.
-  Charge one reasoning unit per investigation for now.</p>
-
-  <p>After \(n\) ancillary investigations, the pending ancillary frontier has
-  size \(n+1\): each investigation removes one candidate and adds two fresh
-  ones. All \(n\) discovered results remain in the library. If \(\tau\) is
-  the selection on which the target is proved, its survival probability is</p>
-
-  \[
-    S_n:=\Pr(\tau&gt;n)
-       =\prod_{j=1}^{n}\frac{j}{j+w},
-    \qquad S_0=1.
-  \]
-
-  <p>This yields a power-law tail directly from the exploration dynamics:</p>
-
-  \[
-    S_n=\Theta(n^{-w}),\qquad
-    \mathbb E[\tau]=
-    \begin{cases}
-      \displaystyle\frac{w}{w-1},&w&gt;1,\\[0.7em]
-      \infty,&0&lt;w\le1.
-    \end{cases}
-  \]
-
-  <p>Nevertheless, the target is reached almost surely for every \(w&gt;0\),
-  because \(S_n\to0\). At \(w=1\), the product telescopes to
-  \(S_n=1/(n+1)\). The infinite mean then comes from a small probability of
-  exploring a very large number of fresh candidates. No forgotten proof or
-  repeated failed attempt is needed.</p>
-
-  <details>
-    <summary>Deriving the tail and the mean</summary>
-    <p>Conditioned on surviving \(j-1\) selections, there are \(j\)
-    ancillary candidates, so the probability of surviving one more selection is
-    \(j/(j+w)\). Multiplying gives the product. For fixed \(w&gt;0\),</p>
-    \[
-      \log S_n=-\sum_{j=1}^n\log(1+w/j)
-               =-w\sum_{j=1}^n\frac1j+O(1)
-               =-w\log n+O(1).
-    \]
-    <p>The bounded remainder follows from convergence of \(\sum_j j^{-2}\);
-    finitely many small \(j\) contribute another constant. Thus the survival
-    probabilities are bounded above and below by positive multiples of
-    \(n^{-w}\). Since \(\mathbb E\tau=\sum_{n\ge0}S_n\), the mean is finite
-    exactly when \(w&gt;1\).</p>
-    <p>For its exact value, the recurrence for \(S_n\) gives</p>
-    \[
-      (n+w)S_n-(n+1+w)S_{n+1}=(w-1)S_n.
-    \]
-    <p>Summing from \(n=0\) to \(H\) telescopes:</p>
-    \[
-      (w-1)\sum_{n=0}^{H}S_n
-       =w-(H+1+w)S_{H+1}.
-    \]
-    <p>When \(w&gt;1\), the remaining term tends to zero, giving
-    \(w/(w-1)\). The tail argument handles the other cases without subtracting
-    infinite expectations.</p>
-  </details>
-
-  <p>We can make the construction universe finite. Retain ancillary levels
-  \(0,\ldots,D\), where \(D\ge0\), and give leaves no descendants. There
-  are \(N=2^{D+1}-1\) ancillary candidates. The same scheduler now has the
-  exact mean</p>
-
-  \[
-    \mathbb E[\tau_D]
-    =1+\sum_{d=0}^{D}\frac{2^d}{(1+w)^{d+1}}
-    =
-    \begin{cases}
-      \displaystyle 1+
-       \frac{1-\left(2/(1+w)\right)^{D+1}}{w-1},&w\ne1,\\[1em]
-      \displaystyle 1+\frac{D+1}{2},&w=1.
-    \end{cases}
-  \]
-
-  <p>As the ancillary universe grows, the mean remains bounded for \(w&gt;1\),
-  grows logarithmically in \(N\) for \(w=1\), and grows as</p>
-  \[
-     \Theta\!\left(N^{\,1-\log_2(1+w)}\right)
-     \qquad(0&lt;w&lt;1).
-  \]
-  <p>The last case is exponential in the ancillary depth \(D\), but only a
-  power of the number of ancillary candidates. Neither \(D\) nor \(N\)
-  measures the target's proof length. This distinction matters when interpreting
-  a scaling plot.</p>
-
-
-  <figure>
-    <a href="/assets/autoprover/guided-search.svg" aria-label="Open the scheduling-cost graph at full size">
-      <img src="/assets/autoprover/guided-search.svg" width="840" height="500"
-           alt="Mean selections versus the number of ancillary candidates, with logarithmic axes. The weighted scheduler has bounded, logarithmic, or power-law growth depending on its guide. Investigating the two initial candidates first always takes at most two selections."
-           loading="lazy">
-    </a>
-    <figcaption>Exact finite-model means under the weighted scheduler. Both axes are logarithmic. The dashed line is an upper bound for the alternative policy that investigates the initial candidates first. The target can be reached within two selections even where the weighted scheduler becomes arbitrarily costly. <a href="/assets/autoprover/guided-search.svg">Open the full-size graph.</a></figcaption>
-  </figure>
-  <details>
-    <summary>Why the finite-tree formula is exact</summary>
-    <p>Use exponential clocks as a mathematical device. Start a rate-\(w\)
-    clock for the target candidate, and a rate-one clock for each ancillary
-    candidate when its parent is investigated. Start the ancillary root's clock
-    immediately. The next ringing clock has the stipulated weighted selection
-    probabilities. After it rings, memorylessness leaves the other pending
-    clocks with their original laws. Thus the sequence of investigations has
-    exactly the scheduler's distribution. This auxiliary clock is neither
-    physical time nor charged reasoning effort.</p>
-    <p>In the ancillary process run without stopping at the target, a fixed node
-    at depth \(d\) is investigated at the sum \(U_1+\cdots+U_{d+1}\) of
-    independent rate-one exponential clocks along its ancestral path. Let
-    \(V\) be the independent rate-\(w\) target clock. Then</p>
-    \[
-      \Pr(U_1+\cdots+U_{d+1}&lt;V)
-      =\prod_{i=1}^{d+1}\mathbb E[e^{-wU_i}]
-      =\left(\int_0^\infty e^{-(1+w)t}\,dt\right)^{d+1}
-      =(1+w)^{-(d+1)}.
-    \]
-    <p>Count every ancillary investigation preceding the target, then add one
-    for the target itself. There are \(2^d\) nodes at depth \(d\). Linearity
-    of expectation gives the displayed sum; different nodes need not be
-    independent. Summing the geometric progression and substituting
-    \(D+1=\log_2(N+1)\) gives the three regimes.</p>
-  </details>
-
-  <p>The two-selection counterpolicy rules out interpreting this transition as
-  unavoidable proof-discovery cost. A prover that knows the ensemble can exploit
-  its initial-frontier structure. In fact, use exactly the same first random
-  choice as the weighted scheduler, and inspect the other initial candidate if
-  that choice produces an ancillary result. This policy finishes no later on
-  every coupled run, and its mean is \(1+1/(1+w)\) at every depth. It requires
-  no stronger initial guide: the first choice succeeds with probability
-  \(w/(1+w)\), and otherwise the second succeeds. The result instead shows that perfect memory
-  and almost-sure eventual success do not guarantee a finite mean under a fixed
-  allocation of attention. A transition observed in one prover's running cost
-  could therefore reflect its policy rather than intrinsic difficulty of the
-  targets.</p>
-
-  <p>Even additional knowledge can hurt a fixed scheduler if it exposes more
-  competing candidates. With one target candidate of weight \(w\) and
-  \(m\) terminal ancillary candidates of weight one, each ancillary candidate
-  precedes the target with probability \(1/(1+w)\), by the same clock
-  calculation. Hence \(\mathbb E\tau=1+m/(1+w)\). This does not mean that
-  the best achievable prover becomes worse: if it can ignore the additions and
-  emulate its old policy at the same cost, its optimal cost cannot increase.
-  Fixed-policy performance and the best available performance are different
-  comparisons.</p>
-
-  <details>
-    <summary>Charging a growing cost for each choice</summary>
-    <p>In the infinite binary model, suppose the investigation following
-    \(n\) ancillary discoveries costs a deterministic amount \(c_n\). The
-    expected total charged work is</p>
-    \[
-       \mathbb E C=\sum_{n\ge0}c_n S_n.
-    \]
-    <p>This follows by writing total work as a sum of the cost of each selection
-    times its indicator of being reached, and summing nonnegative expectations.
-    If \(c_n=\Theta((n+1)^a)\), with \(a\ge0\), the mean is finite exactly
-    when \(w&gt;a+1\). A guide that scans the entire pending frontier at every
-    choice, for example, has a different threshold from a guide charged constant
-    work. Costs bounded above and bounded away from zero give the original threshold. Costs proportional
-    to a nonnegative power of \(\log(n+2)\) also retain the threshold at one.
-    Obtaining the assumed selection bias and representing an expanding library
-    therefore belong in the resource accounting.</p>
-  </details>
-</section>
-
-
-
-
-<h2 id="knowledge-cascades">A threshold in easy accessibility</h2>
-
-<p>
-Suppose a new lemma makes several further lemmas easy, and those make still more
-constructions easy. Can this amplification change qualitatively as the known
-library grows? A simple random model says yes. Here “easy” includes recognizing
-what to try, choosing the necessary premises, and composing the construction.
-Executing and checking the resulting proof remain negligible costs.
-</p>
-
-<p>
-Take \(N\) labelled mathematical objects, temporarily treating theorems,
-definitions, types, and tactics alike. Reserve one label as a possible target.
-Choose \(\lfloor\rho N\rfloor\) distinct initially known objects uniformly from
-the other labels, with \(0&lt;\rho&lt;1\). Sample \(\lfloor\lambda N\rfloor\)
-binary rules uniformly, allowing repetitions:
+<p>For example, at projection/constructor resolution, a hypothesis \(h:P\land Q\) gives the constructions</p>
 \[
-\{A,B\}\longrightarrow C,
+h\to p:P,\qquad h\to q:Q,\qquad
+\{p,q\}\to g:Q\land P.
 \]
-where the three labels are distinct and the prerequisite pair is unordered.
-Both prerequisites are needed; different rules concluding \(C\) are alternative
-derivations. The average number of incoming rules per object tends to
-\(\lambda\). These are the easy rules. Give every object a much harder
-construction from the original setup, outside this restricted graph.
-Every target theorem therefore remains provable throughout the experiment.
-</p>
+<p>The two projections can be taken in either order, and their results remain available.</p>
 
-<p>
-Keep applying easy rules whose premises are known, retaining each conclusion,
-until no further object can be added. Call the resulting set the easy closure.
-The order of application cannot change this set: by induction, every construction
-sequence stays inside every closed superset of the seeds, and a saturated sequence
-is itself such a closed superset. Thus all saturated sequences give the least
-closed superset. Order can change the time to a particular target, which this
-first model does not calculate.
-</p>
+<h2 id="closure">Closure and combining libraries</h2>
 
-<p>
-To interpret closure as achievable reasoning work, assume an efficient agenda:
-newly established premises expose the relevant easy constructions, and each
-rule needs only bounded total attention. This is an additional assumption about
-discovery and retrieval. Checking an already supplied rule cheaply would not
-justify it. Under this assumption, the sparse graph requires \(O(N)\) reasoning
-work to saturate. Establishing a positive fraction of new objects still requires
-order \(N\) individual constructions. Without the agenda assumption, closure
-describes available opportunities, while locating them may dominate the cost.
-The assumed access is to relevant local rules, rather than the full truth graph.
-</p>
-<p>This interface supplies a substantive discovery resource. A graph can have a
-single enabled construction \(K_0\to G\), while the prover must choose among
-\(M\) candidate descriptions to find the one that realizes it. If failed
-descriptions give only failure feedback, the preceding no-advice model needs
-\((M+1)/2\) expected selections. Supplying the correct description's index
-reduces that cost to one, without changing the construction graph.
-Sparse dependencies alone therefore do not establish the agenda's work bound.</p>
-
-<p>
-Let \(X_N\) be the fraction of objects in the final closure. A mean-field
-calculation predicts its large-system limit \(x\). A typical object has
-approximately Poisson\((\lambda)\) incoming rules. Treating the availability of
-their prerequisites as independent, a rule is enabled with probability \(x^2\).
-The probability that no incoming rule is enabled is consequently
+<p>For any supplied set \(K\), define</p>
 \[
-\sum_{m=0}^{\infty}
-e^{-\lambda}\frac{\lambda^m}{m!}(1-x^2)^m
-=e^{-\lambda x^2}.
+F(K)=K\cup\{v:\exists(P,v)\in E,\ P\subseteq K\},
+\qquad
+\operatorname{cl}(K)=\bigcup_{n\ge0}F^n(K).
 \]
-An object remains unknown if it was not a seed and no rule produces it:
+<p>Here \(F\) applies all enabled rules in parallel; its iteration count is not serial proof cost. Closure has the properties</p>
+\[
+\begin{gathered}
+K\subseteq\operatorname{cl}(K),\qquad
+K\subseteq L\Rightarrow\operatorname{cl}(K)\subseteq\operatorname{cl}(L),\\
+\operatorname{cl}(\operatorname{cl}(K))=\operatorname{cl}(K),\\
+v\in\operatorname{cl}(K)
+\iff v\text{ has a finite derivation from }K.
+\end{gathered}
+\]
+<p><strong>Proof.</strong> The first two follow by induction on iterations of \(F\). Each rule has finitely many premises, so premises in the union all occur by some finite iteration; the union is therefore closed. Inductively expanding a construction gives a finite derivation, and induction along any finite derivation puts its conclusion in the union. The union of known sets along any schedule that eventually applies every enabled rule is therefore \(\operatorname{cl}(K)\).</p>
+
+<p>Along a run, \(K_0\subseteq K_t\subseteq\operatorname{cl}(K_0)\), hence</p>
+\[
+\operatorname{cl}(K_t)=\operatorname{cl}(K_0).
+\]
+<p>The constructed library grows within a fixed deductive closure.</p>
+
+<p>Combining libraries can produce more than their separate consequences:</p>
+\[
+\operatorname{cl}(A)\cup\operatorname{cl}(B)
+\subseteq\operatorname{cl}(A\cup B).
+\]
+<p>The inclusion follows from monotonicity. With at most one premise per rule it is equality: each derivation follows a chain from one library (or a rule with no premises). Binary rules allow strict inclusion: with the sole rule \(\{a,b\}\to c\), neither \(\{a\}\) nor \(\{b\}\) yields \(c\), but their union does. This is a minimal model of two bodies of mathematics becoming useful together.</p>
+
+<h2 id="distance">Construction distance</h2>
+
+<p>For a target \(G\in\operatorname{cl}(K_0)\) and a library \(K\supseteq K_0\), let</p>
+\[
+d(K,G)=\min\{m:G\text{ can be added to }K
+\text{ in }m\text{ elementary steps}\}.
+\]
+<p>Set \(d(K,G)=0\) when \(G\in K\). A derivation may share previously constructed premises between several branches. Consequently this counts constructions in the hypergraph, including that reuse. For \(K\subseteq L\), and for a single allowed addition \(K'=K\cup\{v\}\),</p>
+\[
+\boxed{d(L,G)\le d(K,G),\qquad
+0\le d(K,G)-d(K',G)\le1.}
+\]
+<p><strong>Proof.</strong> Extra knowledge can be ignored, so it cannot increase the minimum. Conversely, prepend the step \(K\to K'\) to a shortest derivation from \(K'\): \(d(K,G)\le1+d(K',G)\).</p>
+
+<p>Thus unit steps partition into those that decrease this distance by one and those that leave it unchanged. Let \(\tau=\inf\{t:G\in K_t\}\). A successful run satisfies the exact identity</p>
+\[
+\tau=d(K_0,G)+\#\{\text{steps that leave }d\text{ unchanged}\}.
+\]
+<p>There may be many such steps, even when every construction is valid and retained. This minimum belongs to the fixed hypergraph and step resolution; computing it already requires knowledge of possible proofs. A step that leaves it unchanged can still help discover a route, or serve other targets.</p>
+
+<p><strong>Finite closure bound.</strong> If \(\operatorname{cl}(K_0)\) has \(N\) nodes, a process that keeps adding new enabled nodes reaches \(G\) in at most \(N-|K_0|\) additions. Indeed, before \(G\) is known, the first missing step of a derivation of \(G\) supplies an enabled addition. This bounds successful constructions; locating them may require failed proposals.</p>
+
+<h2 id="density-is-not-enough">Equal degrees, different growth</h2>
+
+<p>Take \(N\ge8\), divisible by four, and seed each node independently with probability \(\rho\). The following two hypergraphs both have three incoming binary rules and six premise incidences at every node.</p>
+
+<p><strong>Groups.</strong> Partition the nodes into groups of four. For each head, any pair of the other three can produce it. A group fills exactly when it starts with at least two seeds. The probability that a particular node enters the closure is</p>
+\[
+x_{\mathrm{groups}}(\rho)
+=\rho+(1-\rho)\Pr(\operatorname{Bin}(3,\rho)\ge2)
+=\rho+(1-\rho)(3\rho^2-2\rho^3).
+\]
+<p>Independent groups make the closure fraction converge in probability to this smooth polynomial.</p>
+
+<p><strong>Ring.</strong> Index nodes modulo \(N\). For each \(i\), use every pair of \(i-1,i-2,i-3\) as premises for \(i\). Two adjacent seeds propagate around the whole ring. Seeds at distance two first produce an adjacent pair. If no seed pair has cyclic distance one or two, no rule is enabled. Therefore</p>
+\[
+1-(1-\rho^2)^{\lfloor N/2\rfloor}
+\le\Pr(\text{ring fills})\le\min\{1,2N\rho^2\}.
+\]
+<p><strong>Proof of the bounds.</strong> The lower bound uses disjoint adjacent pairs, whose seed events are independent. For the upper bound, take the union bound over the \(2N\) pairs at cyclic distance one or two.</p>
+
+<p>The ring fills with probability tending to one if \(N\rho^2\to\infty\), and to zero if \(N\rho^2\to0\). Its threshold scale is \(N^{-1/2}\). For fixed \(0&lt;\rho&lt;1\), the ring's closure fraction tends to one while the groups' fraction stays below one. Uniform step costs, arity, and every degree agree; the arrangement of dependencies changes the large-system behavior.</p>
+
+<h2 id="knowledge-cascades">A random ensemble with a discontinuous transition</h2>
+
+<p>Fix \(0&lt;\rho&lt;1\) and \(\lambda&gt;0\). Choose \(\lfloor\rho N\rfloor\) seeds uniformly among \(N\) labels, and sample \(\lfloor\lambda N\rfloor\) rules \(\{a,b\}\to c\) uniformly, with three distinct labels and with replacement. Let \(X_N=|\operatorname{cl}(K_0)|/N\). This is an ensemble of finite construction regions; derivations outside the region are omitted.</p>
+
+<p>A Poisson approximation gives mean \(\lambda x^2\) enabled incoming rules at closure density \(x\), suggesting</p>
 \[
 \boxed{x=1-(1-\rho)e^{-\lambda x^2}.}
 \]
-</p>
+<p><strong>Known theorem.</strong> When the least root is simple, \(X_N\to x\) in probability. This is the positive-closure result in <a href="https://arxiv.org/pdf/math/0505032">Moore, Istrate, Demopoulos, and Vardi, Lemma 3.1</a>, with parameters \((d_1,d_2,d_3)=(\rho,0,\lambda)\). Symmetry allows their excluded seed label to be randomized, giving the uniform seed set here. Iteration from \(x_0=\rho\) selects the least fixed point: the iterates increase and are bounded above by every fixed point.</p>
 
-<p>Independence here is a heuristic, not a proof. For this particular sparse
-random ensemble, a proved limit theorem justifies the equation away from
-multiple-root parameters.</p>
-<details>
-<summary>The precise result being used</summary>
-<p>Lemma 3.1 of
-<a href="https://arxiv.org/pdf/math/0505032">Moore, Istrate, Demopoulos, and
-Vardi</a> establishes \(X_N\to x\) in probability when the smallest positive
-root is simple, for fixed positive seed density as \(N\to\infty\). Their
-parameters are \(d_1=\rho,d_2=0,d_3=\lambda\); we use the positive closure
-analyzed in their lemma, with the formula's negative target literal removed.
-Sampling rules with or without replacement has the same limit here:
-the probability of any duplicate is \(O(1/N)\).
-The independence calculation thus has a rigorous limiting justification in
-this particular ensemble. It is not a theorem about arbitrary mathematical
-libraries, nor does that lemma cover the multiple root at the transition.
-</p>
-</details>
-
-<p>
-When the equation has several roots, we select the smallest. Starting with
-\(x_0=\rho\) and iterating
+<p>The transition follows by solving for \(\rho\):</p>
 \[
-x_{n+1}=1-(1-\rho)e^{-\lambda x_n^2}
+\rho(x)=1-(1-x)e^{\lambda x^2},\qquad
+\rho'(x)=e^{\lambda x^2}[1-2\lambda x(1-x)].
 \]
-gives an increasing bounded sequence. Every fixed point bounds this sequence
-from above, so its limit is the least fixed point. This iteration selects the
-closure branch; its iteration count is not a count of serial reasoning steps.
-</p>
-
-<p>
-For \(\lambda&lt;2\), increasing the seed density increases the limiting closure
-continuously. For \(\lambda&gt;2\), a small increase can eliminate the lower
-branch and produce a discontinuous jump. At \(\lambda=3\), the threshold is
-\(\rho_c\approx0.0982574\). Solving the equation gives \(x\approx0.19994\)
-at \(\rho=0.098\), but \(x\approx0.93434\) at \(\rho=0.099\).
-The extra seeds can therefore unlock a large fraction of the remaining objects.
-These numbers are properties of the model, not measurements of an autoprover.
-</p>
-<p>The reserved target is initially unknown, so its limiting probability of entering
-the easy closure is \((x-\rho)/(1-\rho)\), rather than \(x\). To see this, subtract
-the seeds from the expected closure size and divide by the number of nonseed
-labels; symmetry gives the same probability for each such label. Boundedness of
-\(X_N\) turns its convergence in probability into convergence of its mean.
-The probabilities are approximately \(11.3\%\) and \(92.7\%\) for the two
-densities above. The fixed target behaves like the other labels because this
-ensemble makes no distinctions between their mathematical roles.</p>
+<p>For \(\lambda&lt;2\), this derivative is positive. For \(\lambda&gt;2\), the lower branch ends at a local maximum:</p>
+\[
+x_- =\frac{1-\sqrt{1-2/\lambda}}2,\qquad
+\rho_c=1-(1-x_-)e^{\lambda x_-^2}.
+\]
+<p>Increasing \(\rho\) through \(\rho_c\) removes the lower root, so the limiting closure jumps. For \(\lambda=3\), \(\rho_c\approx0.0982574\): the least root is about \(0.19994\) at \(\rho=0.098\), and \(0.93434\) at \(\rho=0.099\).</p>
 
 <figure>
-  <a href="/assets/autoprover/knowledge-cascade.svg" aria-label="Open the knowledge-cascade graph at full size">
+  <a href="/assets/autoprover/knowledge-cascade.svg" aria-label="Open the closure graph at full size">
     <img src="/assets/autoprover/knowledge-cascade.svg" width="840" height="540"
-         alt="Easy closure fraction versus seed fraction. Random dependencies at density three jump near 9.83 percent seeds. Densities one-and-a-half and two remain continuous. Disjoint groups of four have density three but a smooth response."
+         alt="Closure fraction versus seed fraction: random binary rules at density three have a jump near 9.83 percent seeds; disjoint groups with the same density have a smooth response."
          loading="lazy">
   </a>
-  <figcaption>
-    The least fixed point can jump as the initial library grows. The curve
-    describes the infinite-system limit; each finite library has finitely many
-    additions, and its transition location fluctuates with the sampled rules.
-    The dotted line marks the one-sided jump, without asserting concentration
-    exactly at the critical parameter. The dashed curve is the counterexample
-    derived below. <a href="/assets/autoprover/knowledge-cascade.svg">Open the full-size graph.</a>
-  </figcaption>
+  <figcaption>Limiting closure fractions. The dotted segment marks the jump, without assigning a limit at the discontinuous critical point. <a href="/assets/autoprover/models.py">Reproduce the calculations.</a></figcaption>
 </figure>
 
-<details>
-  <summary>The threshold calculation</summary>
-  <p>
-  Rearranging the fixed-point equation expresses the seed density as
-  \[
-  \rho(x)=1-(1-x)e^{\lambda x^2},
-  \qquad
-  \rho'(x)=e^{\lambda x^2}\bigl[1-2\lambda x(1-x)\bigr].
-  \]
-  Since \(x(1-x)\leq1/4\), this derivative is positive for \(\lambda&lt;2\).
-  At \(\lambda=2\) it first vanishes at \(x=1/2\), giving the critical endpoint
-  \[
-  (\lambda_c,x_c,\rho_c)=
-  \left(2,\frac12,1-\frac{\sqrt e}{2}\right).
-  \]
-  For \(\lambda&gt;2\), the low branch ends at
-  \[
-  x_-=\frac{1-\sqrt{1-2/\lambda}}2,
-  \qquad
-  \rho_c(\lambda)=1-(1-x_-)e^{\lambda x_-^2}.
-  \]
-  Here \(\rho(x)\) has a local maximum: increasing \(\rho\) past it removes
-  the low solution, leaving a larger least root. Substituting \(\lambda=3\)
-  gives the quoted threshold. At the endpoint the jump vanishes, but the
-  response slope diverges.
-  </p>
-  <p>The cited simple-root theorem does not directly cover the continuous
-  endpoint at \(\lambda=2\). Here monotonicity supplies the missing argument.
-  Choose seed sets by taking initial segments of one random ordering, so they
-  are nested as \(\rho\) increases. The closure at \(\rho_c\) is sandwiched
-  between the closures at \(\rho_c-\varepsilon\) and
-  \(\rho_c+\varepsilon\). Those two densities have simple roots, so their
-  closure fractions converge in probability. Taking \(N\to\infty\) and then
-  \(\varepsilon\to0\), continuity of the least root forces the middle fraction
-  to converge to \(1/2\). At a discontinuous threshold the two one-sided limits
-  differ, so this argument does not establish concentration there.</p>
-</details>
-
-<p>
-There is also a useful local interpretation. Around a stable closure of density
-\(x\), a newly supplied unknown object participates in about \(2\lambda\)
-rules as a premise. A rule can add another object when its other premise is
-known and its conclusion is unknown. Ignoring collisions and correlations
-gives an expected number of descendants
+<p>On a simple branch, implicit differentiation also gives a response coefficient:</p>
 \[
-R=2\lambda x(1-x).
+\frac{dx}{d\rho}
+=\frac{1-x}{(1-\rho)[1-2\lambda x(1-x)]}.
 \]
-Approximating successive discoveries by independent branching, the mean total
-avalanche \(S\), including its initial seed, satisfies
+<p>It diverges as the lower branch approaches its endpoint. Equal-cost local constructions can therefore exhibit both collective amplification and a singular response to additional initial knowledge.</p>
+
+<details>
+  <summary>The continuous endpoint and finite-system qualification</summary>
+  <p>At \(\lambda=2\), \(\rho'(x)\) vanishes only at \(x=1/2\); the root remains unique and continuous. Its seed density is \(1-\sqrt e/2\). To extend the simple-root limit theorem there, couple nested seed sets at \(\rho_c-\varepsilon,\rho_c,\rho_c+\varepsilon\). Closure monotonicity sandwiches the middle fraction between the outer two. First take \(N\to\infty\), then \(\varepsilon\to0\). The outer limits both approach \(1/2\). At a discontinuous endpoint they differ, so this argument gives no concentration claim there. The plotted curves are large-system limits, not observations of an actual prover.</p>
+</details>
+
+<h2 id="percolation">Percolation and finite observations</h2>
+
+<p>The closure operation is a generalized bootstrap-percolation process: known nodes are active, and a node activates when one of its prescribed prerequisite sets is active. Its formulation as <a href="https://dmtcs.episciences.org/578">directed-hypergraph propagation</a> retains the AND condition within each rule. An infinite ambient graph is compatible with every actual exploration and every proof being finite.</p>
+
+<p>For comparison, ordinary independent bond percolation on an infinite connected, locally finite, vertex-transitive graph \(\Gamma\) has a precise finite-to-infinite relation. Set</p>
 \[
-\mathbb E[S]=\sum_{n=0}^{\infty}\mathbb E[Z_n]
-=\sum_{n=0}^{\infty}R^n
-=\frac1{1-R}\quad(R&lt;1).
+q_R(p)=\Pr_p(o\text{ connects to the boundary of }B_R),
+\qquad \theta(p)=\Pr_p(o\leftrightarrow\infty).
 \]
-Here \(Z_n\) counts generation \(n\), with \(Z_0=1\);
-independent offspring of mean \(R\) give \(\mathbb E[Z_n]=R^n\) by induction.
-Summing nonnegative generation sizes justifies the expectation.
-This is exact for that branching approximation, not for finite hypergraphs.
-As \(R\) approaches one, small additions have increasing consequences; at
-the branch endpoint, \(R=1\).
-</p>
-
-<p>
-The transition concerns what our prover can reach through the stipulated easy
-constructions. It changes neither truth nor the eventual reachability allowed
-by the hard fallback proofs. It also does not manufacture free proofs: an
-avalanche amortizes an initial difficult insight across many bounded-cost
-constructions. More compute can execute those constructions sooner; a larger
-shared library can change which constructions become available within this
-easy regime.
-</p>
-
-
-<h2 id="density-is-not-enough">Even matching every degree is insufficient</h2>
-
-<p>
-The random model gives a threshold in terms of rule density and initial
-knowledge. Could those two numbers describe a much wider class of libraries?
-They cannot. We can construct two families with exactly the same incoming
-and outgoing degrees at every object, yet radically different growth.
-Take \(N\ge8\) divisible by four. Initially supply each object independently
-with probability \(\rho\). All rules below have two prerequisites, and all
-objects retain their hard fallback constructions.
-</p>
-
-<p>
-First divide the objects into groups of four. For each object, include every
-pair of the other three group members as a possible set of premises. Each
-object has three incoming rules and appears as a premise in six rules.
-A group with zero or one seed cannot grow; two seeds suffice to establish
-the whole group. An arbitrary member therefore belongs to the final closure
-with probability
+<p>Here \(B_R\) is the radius-\(R\) ball around \(o\), and reaching its boundary means crossing an edge leaving it. Write \(p_c=\inf\{p:\theta(p)&gt;0\}\). The sharpness bounds hold with some \(c=c(p,\Gamma)&gt;0\):</p>
 \[
-x_{\mathrm{groups}}(\rho)
-=\rho+(1-\rho)(3\rho^2-2\rho^3).
+\begin{array}{ll}
+p&lt;p_c:&q_R(p)\le e^{-cR},\\
+p&gt;p_c:&0\le q_R(p)-\theta(p)\le e^{-cR}.
+\end{array}
 \]
-Independent groups make the overall fraction converge to this polynomial.
-The dashed curve in the preceding figure shows this smooth response.
-</p>
+<p>The supercritical bound is <a href="https://arxiv.org/html/2603.03257v1">Diskin and collaborators, Theorem 1 (2026)</a>; the subcritical bound is classical. These concern complete finite balls of a specified random graph. Applying them to proof hypergraphs would require a corresponding theorem: countability and equal costs do not supply independence, symmetry, or ordinary connectivity. An arbitrary prover trace need not expose a complete ball. Sharpness also does not mean the order parameter must jump discontinuously.</p>
 
-<p>
-Now arrange the same number of objects on a ring. For each object \(i\), include
-the three rules
+<h2 id="research">What might a prover exploit?</h2>
+
+<p>The graph supplies both obstructions and opportunities: joint prerequisites, shared intermediates, dependency bottlenecks, and regions where new knowledge triggers cascades. A prover must select steps without knowing their full consequences. Humans and autoprovers nevertheless seem to have a sense of direction: we simplify a goal, introduce a construction, or choose a promising lemma before possessing the completed proof.</p>
+
+<p>The distance above gives one precise interpretation. Let \(p_t\) be the conditional probability that the next proposal decreases \(d(K_t,G)\), given the entire run so far. If \(p_t\ge\varepsilon&gt;0\) until success, then</p>
 \[
-\{i-1,i-2\}\to i,\qquad
-\{i-1,i-3\}\to i,\qquad
-\{i-2,i-3\}\to i,
+\mathbb E[\tau]\le\frac{d(K_0,G)}{\varepsilon}.
 \]
-with indices taken modulo \(N\). Again every object has three incoming rules
-and appears as a premise in six rules. Thus both families have \(3N\) binary
-rules and the same degree sequence, not merely the same average density.
-</p>
+<p><strong>Proof.</strong> With \(T_n=\min(\tau,n)\), expected accumulated decreases are at least \(\varepsilon\mathbb E[T_n]\) and at most \(d(K_0,G)\). Let \(n\to\infty\). No independence of successive choices is needed. For uniform selection from a finite candidate set, \(p_t\) is simply its fraction of distance-decreasing moves.</p>
 
-<p>
-Two adjacent seeds now establish the entire ring: they produce the next
-object, leaving another adjacent known pair, and the construction continues.
-Two seeds separated by one intervening object also suffice. Conversely, if
-no two seeds are within cyclic distance two, no rule has both premises known,
-so nothing new can be established. These alternatives completely characterize
-the ring's closure.
-</p>
+<p>Can recognizable features of the hypergraph predict those moves? Does useful direction come from simulating short continuations, learned structural regularities, or both? Can properties measured in explored regions predict cascade thresholds elsewhere? These are research questions; the formulas above do not supply that prediction.</p>
 
-<p>
-There are \(\lfloor N/2\rfloor\) disjoint adjacent pairs. Their seed events are
-independent, giving
-\[
-\Pr(\text{whole ring established})
-\ge 1-(1-\rho^2)^{\lfloor N/2\rfloor}.
-\]
-For every fixed \(\rho&gt;0\), this probability tends to one. The ring's closure
-fraction therefore tends to one, while the grouped library's fraction remains
-strictly below one whenever \(\rho&lt;1\). The difference comes from how
-dependencies connect, although the cost convention, arity, and all local
-degrees agree.
-</p>
-
-<p>
-This is also a concrete warning about the placement of known results. On the
-same ring, with the same number \(m\) of seeds, the outcomes can be opposite.
-When \(2\le m\le N/3\), place the seeds at least three positions apart and
-there is no growth. Move two into adjacent positions, preserving \(m\), and
-the entire ring becomes accessible. A library produced by earlier research
-need not resemble independently scattered seeds.
-</p>
-
-<details>
-  <summary>Proof of the ring criterion and its finite-size scale</summary>
-  <p>
-  If \(i,i+1\) are known, the first rule establishes \(i+2\); induction around
-  the ring proves everything. If \(i,i+2\) are seeds, the second rule at
-  \(i+3\) establishes \(i+3\), reducing to the adjacent-pair case. Every
-  prerequisite pair in every rule has cyclic distance one or two. Therefore
-  the absence of all such seed pairs prevents the first new construction.
-  This proves that a close seed pair is necessary and sufficient.
-  </p>
-  <p>
-  There are \(2N\) possible close pairs, each initially present with probability
-  \(\rho^2\). The union bound and the disjoint-pair bound give
-  \[
-  1-(1-\rho^2)^{\lfloor N/2\rfloor}
-  \le \Pr(\text{whole ring established})
-  \le \min\{1,2N\rho^2\}.
-  \]
-  Thus, for a size-dependent seed probability \(\rho_N\), growth has probability
-  tending to zero if \(N\rho_N^2\to0\), and tending to one if
-  \(N\rho_N^2\to\infty\). The crossover scale is \(\rho_N\) of order
-  \(N^{-1/2}\). These bounds establish the scale; they do not specify the
-  probability at \(\rho_N=c/\sqrt N\).
-  </p>
-</details>
-
-<details>
-  <summary>The same conclusion with a fixed number of seeds and a reserved target</summary>
-  <p>
-  To use the earlier seed convention, reserve one initially unknown target
-  and choose exactly \(m\) seeds uniformly from the other \(n=N-1\) objects.
-  The target is established by easy rules exactly when the ring fills.
-  Choose \(L=\lfloor n/2\rfloor\) disjoint adjacent pairs avoiding the target,
-  and let \(Y\) count pairs whose two members are seeds. With
-  \((a)_k=a(a-1)\cdots(a-k+1)\),
-  \[
-  \mu=\mathbb E[Y]=L\frac{(m)_2}{(n)_2}.
-  \]
-  Two distinct pairs are both present with probability
-  \((m)_4/(n)_4\le[(m)_2/(n)_2]^2\), so their indicators have nonpositive
-  covariance. Consequently \(\operatorname{Var}Y\le\mu\).
-  For \(m\ge2\), Cauchy–Schwarz applied to \(Y\mathbf1_{\{Y&gt;0\}}\) gives
-  \[
-  \Pr(Y&gt;0)\ge
-  \frac{(\mathbb E Y)^2}{\mathbb E[Y^2]}
-  \ge\frac{\mu}{1+\mu}.
-  \]
-  The bound is zero when \(m&lt;2\). Of the ring's \(2N\) close pairs,
-  four involve the reserved target and cannot be seeded. A union bound
-  therefore gives
-  \[
-  \frac{\mu}{1+\mu}
-  \le\Pr(\text{target established})
-  \le\min\left\{1,(2N-4)\frac{(m)_2}{(n)_2}\right\}.
-  \]
-  Since \(\mu\sim m^2/(2N)\) when \(m\to\infty\), the threshold scale is
-  again \(m\) of order \(\sqrt N\). In particular, any fixed positive
-  seed fraction establishes the target with probability tending to one.
-  </p>
-  <p>
-  The grouped library retains its polynomial limit under uniform fixed-size
-  sampling. For any specified pattern of \(k\) seeds among four non-target
-  labels, its probability is
-  \((m)_k(n-m)_{4-k}/(n)_4\), which tends to
-  \(\rho^k(1-\rho)^{4-k}\) when \(m/n\to\rho\).
-  The corresponding eight-label calculation makes distinct non-target groups'
-  equal covariances tend to zero; their bounded variances then make the
-  average concentrate. The one group containing the target changes the bulk
-  fraction by at most \(4/N\). Thus the comparison survives the exact
-  fixed-size seed convention.
-  </p>
-</details>
-
-<p>
-The random-Horn threshold remains a valid theorem about its stated ensemble.
-These counterexamples rule out promoting it to a criterion based on density
-or degree statistics alone. They point to a sharper question: which
-dependencies between premises, positions of prior discoveries, and mechanisms
-for finding constructions control the behavior of an actual prover?
-</p>
-
-
-<details>
-  <summary>A bulk transition need not help the chosen theorem</summary>
-  <p>Take the random cascade on \(N\) background objects, preserving all its rules and its sampled seed set. Add one distinguished target \(G\) with no incoming easy rule. Give it a hard fallback proof, as before, and keep it out of the seed set. There are no new edges into the background, so its closure is identical for every realization. The total closure fraction differs from the background fraction by at most \(1/(N+1)\), and therefore retains its limiting transition. Yet the target's easy-access probability is zero on both sides.</p>
-  <p>For a nonconstant target response, add two further objects \(a,b\) with no incoming easy rules, and make \(\{a,b\}\to G\) the target's only easy rule. Give the new objects hard fallback constructions. Preserve the background seeds, seed \(a\) and \(b\) independently with probability \(\rho\), and keep \(G\) unseeded. The target is accessible exactly when both prerequisites were seeds, so its probability is \(\rho^2\), a smooth function. The background closure is still unchanged for every realization, and adding three objects changes the total fraction by at most \(3/(N+3)\). Its bulk transition survives.</p>
-  <p>Thus the earlier target probability \((x-\rho)/(1-\rho)\) depends on the random ensemble's symmetry between labels. A target selected for mathematical interest need not be typical in that sense. To predict progress on that target, the theory must specify how its prerequisites connect to the growing region.</p>
-</details>
-
-
-<details>
-  <summary>One exact statement about combining libraries</summary>
-  <p>Write \(\operatorname{Cl}(K)\) for closure under the same fixed collection of easy rules. For libraries \(K_1,K_2\) containing any common starting setup,</p>
-  \[
-  \operatorname{Cl}(K_1\cup K_2)
-  \supseteq \operatorname{Cl}(K_1)\cup\operatorname{Cl}(K_2).
-  \]
-  <p>Every construction possible from either smaller library remains possible from their union; induction on its construction sequence proves the inclusion. If every rule has only one prerequisite, trace a construction backwards to its starting node: it starts in one library or the other, so equality holds. Multi-premise rules allow strict inclusion. With \(K_1=\{a\}\), \(K_2=\{b\}\), and the sole rule \(\{a,b\}\to c\), neither separate closure contains \(c\), but the joint closure does.</p>
-  <p>This is a statement about restricted easy closure. Full deductive closure already contains the targets stipulated to have hard fallback proofs. If a tactic is one of the new resources, its availability must be represented among the prerequisites; silently changing the rules would be a different comparison.</p>
-</details>
-
-<section id="search-information">
-  <h2>How much must the search be steered?</h2>
-
-  <p>A search history records more than its finished proof: it includes reasoning, failed attempts, and results added to the library. We can put a probability distribution on these histories and ask how strongly a prover must change that distribution to make a chosen theorem likely to be proved.</p>
-
-  <p>Fix an initial library, a target theorem, and a finite computation horizon. Assume the available encoding makes the set \(\Omega\) of admissible histories finite. Let \(Q\) be a specified reference search distribution, positive on every history in \(\Omega\), and let \(P\) describe another prover. The reference may already contain mathematical expertise; nothing requires uniform random search. Let \(A\subset\Omega\) be the histories that prove the target within the horizon, with \(0&lt;q=Q(A)&lt;1\), and write \(p=P(A)\).</p>
-
-  <p>The relative entropy</p>
-  \[
-    D(P\Vert Q)=\sum_{\gamma\in\Omega}
-    P(\gamma)\log\frac{P(\gamma)}{Q(\gamma)}
-  \]
-  <p>measures the change from reference search to informed search. Logs are natural, so its units are nats; terms with \(P(\gamma)=0\) contribute zero. It is not automatically the computation needed to produce that change.</p>
-
-  <p>There is an exact lower bound:</p>
-  \[
-    D(P\Vert Q)\ge d(p\Vert q)
-    =p\log\frac pq+(1-p)\log\frac{1-p}{1-q}.
-  \]
-  <p>Whatever else distinguishes the two provers, changing their probability of success requires at least this much relative entropy. The bound is sharp when arbitrary distributions over histories are allowed.</p>
-
-  <details>
-    <summary>Proof of the success-probability bound</summary>
-    <p>For \(0&lt;p&lt;1\), split the defining sum into successful and unsuccessful histories. Substituting \(P(\gamma)=pP(\gamma\mid A)\) on \(A\), and the corresponding expressions on its complement, gives</p>
-    \[
-      D(P\Vert Q)=d(p\Vert q)
-      +pD(P(\cdot\mid A)\Vert Q(\cdot\mid A))
-      +(1-p)D(P(\cdot\mid A^c)\Vert Q(\cdot\mid A^c)).
-    \]
-    <p>Relative entropy is nonnegative: Jensen's inequality gives</p>
-    \[
-      -D(R\Vert S)
-      =\mathbb E_R\log\frac{S}{R}
-      \le\log\sum_{\gamma:R(\gamma)&gt;0}S(\gamma)\le0.
-    \]
-    <p>Equality holds exactly when \(R=S\). Dropping the two conditional divergences proves the bound. The endpoint cases \(p=0,1\) follow by keeping only the nonempty part. For any prescribed \(p\), equality is attained by the mixture \(pQ(\cdot\mid A)+(1-p)Q(\cdot\mid A^c)\).</p>
-  </details>
-
-  <p>In particular, making success certain has the exact minimum</p>
-  \[
-    \min_{P:P(A)=1}D(P\Vert Q)=\log\frac1q.
-  \]
-  <p>This is a target-relative measure of search information. A target with reference success probability \(e^{-100}\) requires at least 100 nats of steering to guarantee success. This number depends on the reference prover, starting library, and horizon. It does not assign an intrinsic entropy to the theorem.</p>
-
-  <details>
-    <summary>Proof and meaning of the certain-success minimum</summary>
-    <p>Write \(Q_A=Q(\cdot\mid A)\). For every \(P\) supported on \(A\),</p>
-    \[
-      D(P\Vert Q)=D(P\Vert Q_A)+\log\frac1q.
-    \]
-    <p>Nonnegativity gives the minimum, uniquely attained by \(P=Q_A\). Sampling this conditional distribution may require knowing which continuations succeed. Its existence establishes an optimum over distributions, not a computational procedure that a resource-limited prover can necessarily carry out.</p>
-  </details>
-
-  <p>We can also include expenditure. Give each history a finite, nonnegative reasoning cost \(C(\gamma)\), using the designated routine interface and cost convention fixed earlier. For \(\beta&gt;0\), define</p>
-  \[
-    Z_A(\beta)=\sum_{\gamma\in A}Q(\gamma)e^{-\beta C(\gamma)},
-    \qquad F_A(\beta)=-\beta^{-1}\log Z_A(\beta).
-  \]
-  <p>Then the following free-energy identity is exact:</p>
-  \[
-    F_A(\beta)=\min_{P:P(A)=1}
-    \left\{\mathbb E_P C+\beta^{-1}D(P\Vert Q)\right\}.
-  \]
-  <p>This is an application of the Gibbs variational principle; <a href="https://arxiv.org/abs/1205.6946">Bierkens and Kappen</a> develop its relative-entropy control formulation. The added term prices departures from the reference distribution. It is a modeling choice, separate from the reasoning cost already counted in \(C\).</p>
-
-  <details>
-    <summary>Proof of the free-energy identity</summary>
-    <p>Our assumptions ensure \(0&lt;Z_A(\beta)&lt;\infty\). Define</p>
-    \[
-      P_\beta^*(\gamma)=
-      \frac{Q(\gamma)\mathbf1_A(\gamma)e^{-\beta C(\gamma)}}{Z_A(\beta)}.
-    \]
-    <p>For any \(P\) supported on \(A\), substitute this expression into the divergence to obtain</p>
-    \[
-      D(P\Vert P_\beta^*)=D(P\Vert Q)
-      +\beta\mathbb E_PC+\log Z_A(\beta).
-    \]
-    <p>Rearranging yields</p>
-    \[
-      \mathbb E_PC+\beta^{-1}D(P\Vert Q)
-      =F_A(\beta)+\beta^{-1}D(P\Vert P_\beta^*).
-    \]
-    <p>Nonnegativity proves the identity and identifies its unique minimizer. Restricting to computationally realizable policies can only raise the infimum; the restricted class might contain no policy that guarantees success within the horizon.</p>
-  </details>
-
-  <p>The formula expresses a competition between cost and the abundance of accessible successful histories. If two disjoint successful families have constant costs \(c_1,c_2\) and positive reference masses \(w_1,w_2\), their probabilities under the minimizer satisfy</p>
-  \[
-    \frac{P_\beta^*(\text{family }1)}{P_\beta^*(\text{family }2)}
-    =\frac{w_1}{w_2}e^{-\beta(c_1-c_2)}.
-  \]
-  <p>A more accessible family can outweigh a cheaper one. The parameter \(\beta^{-1}\) sets the price of a nat in units of reasoning cost. It is neither a measured physical temperature nor the model's token-sampling temperature. <a href="https://arxiv.org/abs/1204.6481">Ortega and Braun</a> study related information-cost models of bounded rationality.</p>
-
-  <p>These quantities concern histories a prover could in principle record. Estimating success frequencies and evaluating reference probabilities does not require enumerating the complete mathematical hypergraph, although estimating an extremely small \(q\) can demand impractical sampling. If we record only tactic choices, the resulting distributions describe those visible histories. Their relative entropy cannot exceed that of the full computation: partition the histories by their visible records and repeat the conditional-divergence decomposition used in the first proof. The full divergence is the visible divergence plus an average of nonnegative conditional divergences. Hiding deliberation can hide differences between the provers. The statistical description therefore needs an explicit choice of what a history records.</p>
-
-<h3 id="reference-is-not-work">The information quantity is not a work bound</h3>
-
-  <p>The reference distribution must be part of the experiment, fixed together with the interface, initial resources, and horizon. It cannot be chosen afterward to assign a desired difficulty to a theorem. To see why, consider two one-selection histories: success \(s\) and failure \(f\). Let the actual prover always choose \(s\), and give the reference probabilities</p>
-  \[
-    Q(s)=e^{-a},\qquad Q(f)=1-e^{-a},\qquad a&gt;0.
-  \]
-  <p>If the successful history costs one, its certain-success information is \(a\) and its free energy is \(1+a/\beta\). Both can be arbitrarily large while its actual reasoning cost remains one. The free-energy identity bounds an objective that includes a stipulated information surcharge. It is not a lower bound on reasoning expenditure alone.</p>
-
-  <p>Horizon dependence also matters. The frontier model at \(w=1\) gives a reference search with \(\Pr(\tau&gt;n)=1/(n+1)\). It succeeds eventually with probability one but has infinite mean effort, because the sum of its survival probabilities diverges. Nevertheless, success by horizon \(H\) has probability \(H/(H+1)\), so its certain-success information \(\log(1+1/H)\) tends to zero. Success at a budget and mean eventual search cost are different observables.</p>
-
-  <p>Bookkeeping changes should preserve the reference experiment. Split a history into copies with the same cost and success status, and assign them the same conditional weights under both provers. The conditional factors cancel in the relative-entropy ratio and sum to one in the partition function, so both quantities are unchanged. Assigning a fresh uniform distribution after such a split can instead change the model.</p>
-
-  <p>For the finite history space used here, \(Z_A(\beta)\) is a finite sum of positive analytic functions for real \(\beta&gt;0\), so \(F_A(\beta)\) is analytic there. A singular transition requires a specified limiting family. The variational identity does not establish that an implementable prover minimizes this objective. Its benchmark is exact; the cost of realizing its optimizer remains unspecified.</p>
-</section>
-
-
-
-
-
-<h2 id="research">From models to mathematical research</h2>
-
-<p>The calculations now separate three claims. Bounded advice constrains expected work in the verification-only model. A fixed allocation of attention can produce a divergent mean even when another policy solves the same instances in two selections. A random dependency ensemble can undergo a macroscopic accessibility transition, while other ensembles with identical degrees behave differently. These are proved statements about their respective models; identifying a corresponding mechanism in an LLM and proof assistant requires further evidence.</p>
-
-<p>These models also distinguish uses of additional computation. For a fixed sequence of reasoning choices, executing \(M\) choices per second instead of one divides the elapsed time by \(M\). It leaves the number of choices unchanged. A larger library, a different guide, or shared discoveries can change the choice process itself. The earlier calculations quantify particular examples of those changes.</p>
-
-<details>
-  <summary>What independent parallel searches guarantee</summary>
-  <p>If one search succeeds by effort \(c\) with probability \(F(c)\), then \(M\) independent copies each given that effort succeed collectively with probability</p>
-  \[
-  1-[1-F(c)]^M.
-  \]
-  <p>All copies fail exactly when their independent failure events occur together; multiplying their probabilities proves the formula. The maximum combined expenditure is \(Mc\), and can be smaller if workers stop on collective success. Shared discoveries make the searches dependent, so this formula no longer determines their behavior. The easy-closure example above demonstrates one way that sharing can add opportunities unavailable to the separate searches.</p>
-</details>
-
-<p>To connect these models to observations, the full graph is unnecessary. We can record which approaches were tried, reasoning expenditure, verified dependencies, and when new resources became available. These records expose realized paths, not all unrealized alternatives. They support particular measurements:</p>
-
-<div class="table-scroll" tabindex="0" role="region" aria-label="Connections between models and observations">
-<table>
-  <thead><tr><th scope="col">Quantity in the model</th><th scope="col">What an experiment could examine</th><th scope="col">What remains to establish</th></tr></thead>
-  <tbody>
-    <tr><td>Expected search cost under a stated policy</td><td>How costs change as candidate sets grow, and under alternative scheduling policies.</td><td>Whether any apparent transition reflects the target, the available information, or the allocation of attention.</td></tr>
-    <tr><td>Response to new library ingredients</td><td>Matched searches with and without particular lemmas, definitions, or tactics.</td><td>Whether improvements reflect enabling dependencies, retrieval changes, or another mechanism.</td></tr>
-    <tr><td>Success probabilities \(p,q\)</td><td>Repeated runs of fixed policies from the same starting resources.</td><td>Enough observations to resolve rare successes; a meaningful reference policy.</td></tr>
-    <tr><td>Completion-cost tails</td><td>Survival probabilities across repeated runs, retaining unfinished runs in the record.</td><td>Restrictions that justify extrapolating beyond the observed effort range.</td></tr>
-  </tbody>
-</table>
-</div>
-
-<p>An unfinished run has not revealed its eventual completion cost. A finite observed portion of the distribution can even be compatible with both finite and infinite means, as the construction below demonstrates. Likewise, a handful of bursts cannot establish an infinite-system discontinuity. Extrapolation requires restrictions on the process and evidence across scales.</p>
-<details>
-  <summary>Why finite observations cannot determine an unrestricted tail</summary>
-  <p>Suppose histories are observed up to effort \(H\), and a fraction \(r&gt;0\) of the model's runs remain unfinished then. Two models can agree on every history through \(H\) and disagree afterwards. In the first, all remaining runs finish at \(H+1\). In the second they finish at \(H+Y\), where \(Y\ge1\) has survival probability \(\Pr(Y&gt;y)=1/y\) for \(y\ge1\). The second conditional mean is infinite because \(\int_1^\infty dy/y\) diverges; the first model's mean is at most \(H+1\). Both give exactly the same observations through \(H\).</p>
-  <p>More generally, for any nonnegative completion cost \(T\),</p>
-  \[
-  \mathbb E[T]=\mathbb E[\min(T,H)]
-  +\mathbb E[(T-H)_+],
-  \]
-  <p>where \((u)_+=\max(u,0)\). If \(r=\Pr(T&gt;H)&gt;0\), the last term is \(r\,\mathbb E[T-H\mid T&gt;H]\); if \(r=0\), it is zero. The identity follows by splitting each realized cost at \(H\). The probability law of observations through \(H\) determines the first term and the survival probability; finite runs estimate them. Even that complete observation law leaves the remaining tail mean unrestricted when \(r&gt;0\). Finite observations can therefore test a specified tail model; they cannot establish a finite mean or a scaling regime across all possible continuations. A theory supplies restrictions that make extrapolation possible.</p>
-</details>
-
-
-<p>For mathematical progress, the targets and their interest weights should remain specified in advance of the comparison. Counting every additional syntactic consequence would change the question. The random cascade model treats labels symmetrically; applying it to a selected theorem or research area requires understanding that area's dependency structure.</p>
-
-<p>Three questions remain central to this research program:</p>
-<ol>
-  <li>What restrictions on an implementable prover connect reasoning expenditure to the attainable distribution of search histories?</li>
-  <li>Which correlated dependency ensembles retain an accessibility transition, and what changes when the prover must discover the local rules?</li>
-  <li>How do reusable definitions and tactics change those dependencies and the cost of identifying productive routes?</li>
-</ol>
-
-<p>The attempted universal shortcuts have failed: deterministic packaging cannot define what reasoning costs, degree statistics do not determine cascades, and an observed search transition need not be unavoidable. The restricted theorems identify what a stronger theory would have to retain: an information interface, a policy class, a dependency ensemble, and a specified relationship between its targets and prior knowledge.</p>
-
-<p>The refrigerator comparison still asks for more: a relation between the desired mathematical outcome and unavoidable physical work. The free-energy identity here prices changes of search distribution by assumption; it has not derived that price from hardware. <a href="https://arxiv.org/abs/1901.00386">Wolpert's review of the thermodynamics of computation</a> describes how physical cost depends on computational implementation and distributions of inputs. Connecting that physical theory to the reasoning and library models is part of the project.</p>
-
-<p>For now, the question I would pursue is this: under what conditions does a hard-won mathematical ingredient merely add one construction, and under what conditions does it make a large family of interesting constructions accessible?</p>
-
-<details class="reproduction">
-  <summary>Reproduce the figures and numerical examples</summary>
-  <p>The figures show the stipulated models, not prover measurements. Their <a href="/assets/autoprover/models.py">Python source</a> checks the finite search formula by exact enumeration of possible frontiers, and checks the grouped and ring constructions by enumerating seed configurations.</p>
-  <p>From a checkout of this website, run <code>uv run assets/autoprover/models.py</code>. The script declares its plotting dependencies and writes the SVG and PNG figures beside itself. Numerical checks supplement the analytic arguments; they do not prove an asymptotic theorem.</p>
-</details>
+<p>The refrigerator analogy asks for a resource law for reaching a desired state. We have specified a unit of reasoning cost and exhibited structural and statistical laws. Relating them to physical work or a mathematical notion of entropy remains to be done.</p>
 </article>

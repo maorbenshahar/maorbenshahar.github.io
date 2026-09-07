@@ -282,8 +282,8 @@ L 588.440385 27.638052
      </g>
     </g>
     <g id="text_15">
-     <!-- Fraction in the easy closure, $x$ -->
-     <g transform="translate(12.12024 279.1575) rotate(-90)">
+     <!-- Fraction in the closure, $x$ -->
+     <g transform="translate(12.12024 263.1975) rotate(-90)">
       <text>
        <tspan x="0" y="-0.875" style="font-size: 12px; font-family: 'DejaVu Sans'">F</tspan>
        <tspan x="6.902344" y="-0.875" style="font-size: 12px; font-family: 'DejaVu Sans'">r</tspan>
@@ -301,21 +301,16 @@ L 588.440385 27.638052
        <tspan x="72.046875" y="-0.875" style="font-size: 12px; font-family: 'DejaVu Sans'">h</tspan>
        <tspan x="79.652344" y="-0.875" style="font-size: 12px; font-family: 'DejaVu Sans'">e</tspan>
        <tspan x="87.035156" y="-0.875" style="font-size: 12px; font-family: 'DejaVu Sans'"> </tspan>
-       <tspan x="90.849609" y="-0.875" style="font-size: 12px; font-family: 'DejaVu Sans'">e</tspan>
-       <tspan x="98.232422" y="-0.875" style="font-size: 12px; font-family: 'DejaVu Sans'">a</tspan>
-       <tspan x="105.585938" y="-0.875" style="font-size: 12px; font-family: 'DejaVu Sans'">s</tspan>
-       <tspan x="111.837891" y="-0.875" style="font-size: 12px; font-family: 'DejaVu Sans'">y</tspan>
-       <tspan x="118.939453" y="-0.875" style="font-size: 12px; font-family: 'DejaVu Sans'"> </tspan>
-       <tspan x="122.753906" y="-0.875" style="font-size: 12px; font-family: 'DejaVu Sans'">c</tspan>
-       <tspan x="129.351562" y="-0.875" style="font-size: 12px; font-family: 'DejaVu Sans'">l</tspan>
-       <tspan x="132.685547" y="-0.875" style="font-size: 12px; font-family: 'DejaVu Sans'">o</tspan>
-       <tspan x="140.027344" y="-0.875" style="font-size: 12px; font-family: 'DejaVu Sans'">s</tspan>
-       <tspan x="146.279297" y="-0.875" style="font-size: 12px; font-family: 'DejaVu Sans'">u</tspan>
-       <tspan x="153.884766" y="-0.875" style="font-size: 12px; font-family: 'DejaVu Sans'">r</tspan>
-       <tspan x="158.818359" y="-0.875" style="font-size: 12px; font-family: 'DejaVu Sans'">e</tspan>
-       <tspan x="166.201172" y="-0.875" style="font-size: 12px; font-family: 'DejaVu Sans'">,</tspan>
-       <tspan x="170.015625" y="-0.875" style="font-size: 12px; font-family: 'DejaVu Sans'"> </tspan>
-       <tspan x="173.830078" y="-0.875" style="font-style: oblique; font-size: 12px; font-family: 'DejaVu Sans'">x</tspan>
+       <tspan x="90.849609" y="-0.875" style="font-size: 12px; font-family: 'DejaVu Sans'">c</tspan>
+       <tspan x="97.447266" y="-0.875" style="font-size: 12px; font-family: 'DejaVu Sans'">l</tspan>
+       <tspan x="100.78125" y="-0.875" style="font-size: 12px; font-family: 'DejaVu Sans'">o</tspan>
+       <tspan x="108.123047" y="-0.875" style="font-size: 12px; font-family: 'DejaVu Sans'">s</tspan>
+       <tspan x="114.375" y="-0.875" style="font-size: 12px; font-family: 'DejaVu Sans'">u</tspan>
+       <tspan x="121.980469" y="-0.875" style="font-size: 12px; font-family: 'DejaVu Sans'">r</tspan>
+       <tspan x="126.914062" y="-0.875" style="font-size: 12px; font-family: 'DejaVu Sans'">e</tspan>
+       <tspan x="134.296875" y="-0.875" style="font-size: 12px; font-family: 'DejaVu Sans'">,</tspan>
+       <tspan x="138.111328" y="-0.875" style="font-size: 12px; font-family: 'DejaVu Sans'"> </tspan>
+       <tspan x="141.925781" y="-0.875" style="font-style: oblique; font-size: 12px; font-family: 'DejaVu Sans'">x</tspan>
       </text>
      </g>
     </g>
