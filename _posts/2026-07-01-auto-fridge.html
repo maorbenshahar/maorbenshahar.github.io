@@ -2,7 +2,7 @@
 layout: post
 title: "An autoprover as a refrigerator (DRAFT)"
 date: 2026-06-18
-summary: "Closure, geometry, and phase transitions in a hypergraph of elementary proof steps."
+summary: "Libraries built from a fixed core, proof distance, and experiments with magma equations."
 tags: "#lean #math #AI #statistical-mechanics"
 ---
 <link rel="stylesheet" href="/assets/autoprover/article.css">
@@ -18,11 +18,13 @@ E\subseteq\{(P,v):P\subseteq V,\ |P|\le2,\ v\in V\}.
 \]
 <p>Alternative edges into \(v\) represent alternative constructions. We fix the foundation, available operations, and step resolution; binary prerequisites and unit costs are model assumptions.</p>
 
-<p>A run begins with a finite library \(K_0\) and retains what it constructs. Write \(K\) for its current library and \(K_t\) for that library after \(t\) proposals. A successful construction adds its conclusion:</p>
+<p>A run begins with a fixed finite core \(K_0\) of axioms and library results, and retains what it constructs. Every later known node must have a derivation from that core. Write \(K\) for its current library and \(K_t\) for that library after \(t\) proposals. A successful construction adds its conclusion:</p>
 \[
 K\longmapsto K\cup\{v\}
 \quad\text{when }(P,v)\in E\text{ and }P\subseteq K.
 \]
+<p>Call a finite library <em>admissible</em> if some sequence of these steps builds it from \(K_0\). This requires more than a connection drawn back to the core: every premise of a rule must already be available when its conclusion is added. Randomly marking nodes as known does not ensure this. A statistical model can instead choose a distribution over valid histories, which induces a distribution over their resulting libraries.</p>
+
 <p>This models small proof-assistant steps. Writing a tactic inline reaches an intermediate node; naming a lemma records a construction for reuse. We assume useful constructions are retained either way. Tactics themselves can belong to the library. Choosing and proposing a step costs one unit; checking costs are neglected. Failed proposals also cost one unit and leave \(K\) unchanged. The full hypergraph is an idealization, not a map supplied to the prover.</p>
 
 <p>For example, from a hypothesis \(h:A\land B\), we can extract a proof of \(A\), extract a proof of \(B\), and combine them to prove \(B\land A\). Counting each extraction and combination as one step gives</p>
@@ -58,12 +60,20 @@ v\in\operatorname{cl}(K)
 \]
 <p>The constructed library grows within a fixed deductive closure.</p>
 
-<p>Combining libraries can produce more than their separate consequences:</p>
+<p>Two admissible libraries can be combined: first build one, then replay the history of the other, skipping results already present. Their union is still admissible and has the same full closure. What sharing can change is which constructions are available <em>next</em>:</p>
 \[
-\operatorname{cl}(A)\cup\operatorname{cl}(B)
-\subseteq\operatorname{cl}(A\cup B).
+F(A)\cup F(B)\subseteq F(A\cup B).
 \]
-<p>The inclusion follows from monotonicity. With at most one premise per rule it is equality: each derivation follows a chain from one library (or a rule with no premises). Binary rules allow strict inclusion: with the sole rule \(\{a,b\}\to c\), neither \(\{a\}\) nor \(\{b\}\) yields \(c\), but their union does. This is a minimal model of two bodies of mathematics becoming useful together.</p>
+<p>This inclusion follows from monotonicity and can be strict. For example, take a common core \(K_0=\{c\}\) and the rules</p>
+\[
+c\to a,\qquad c\to b,\qquad \{a,b\}\to G.
+\]
+<p>The libraries \(A=\{c,a\}\) and \(B=\{c,b\}\) each take one construction to acquire. From either alone, proving \(G\) takes two more steps: construct the missing premise, then combine them. From their union it takes one. In terms of parallel expansion,</p>
+\[
+F(A)=F(B)=\{c,a,b\},\qquad
+F(A\cup B)=\{c,a,b,G\}.
+\]
+<p>All three libraries have the same eventual consequences. In this example, sharing reduces the work still needed to obtain the target.</p>
 
 <h2 id="distance">Construction distance</h2>
 
@@ -87,73 +97,49 @@ d(K,G)=\min\{m:G\text{ can be added to }K
 
 <p><strong>Finite closure bound.</strong> If \(\operatorname{cl}(K_0)\) has \(N\) nodes, a process that keeps adding new enabled nodes reaches \(G\) in at most \(N-|K_0|\) additions. Indeed, before \(G\) is known, the first missing step of a derivation of \(G\) supplies an enabled addition. This bounds successful constructions; locating them may require failed proposals.</p>
 
-<h2 id="density-is-not-enough">Equal degrees, different growth</h2>
+<h2 id="density-is-not-enough">Library size does not determine remaining work</h2>
 
-<p>How much does the arrangement of dependencies matter? Take \(N\ge8\) nodes, with \(N\) divisible by four. Include each node in the initial library independently with probability \(\rho\); call these initially known nodes <em>seeds</em>. In each of the following hypergraphs, every node has three incoming binary rules and appears as a premise in six rules.</p>
-
-<p><strong>Groups.</strong> Partition the nodes into groups of four. For each node, any pair of the other three can produce it. A group fills exactly when it starts with at least two seeds. A particular node therefore enters the closure if it is a seed itself, or if at least two of its three neighbors are seeds. Its probability of doing so is</p>
+<p>Consider two chains of elementary constructions starting from the same core node \(c\). Each chain has length \(L\), and the target \(G\) ends the first:</p>
 \[
-x_{\mathrm{groups}}(\rho)
-=\rho+(1-\rho)(3\rho^2-2\rho^3).
+\begin{aligned}
+c&\to b_1\to b_2\to\cdots\to b_L=G,\\
+c&\to u_1\to u_2\to\cdots\to u_L.
+\end{aligned}
 \]
-<p>Independent groups make the closure fraction converge in probability to this smooth polynomial.</p>
-
-<p><strong>Ring.</strong> Index nodes modulo \(N\). For each \(i\), use every pair of \(i-1,i-2,i-3\) as premises for \(i\). Two adjacent seeds propagate around the whole ring. Seeds at distance two first produce an adjacent pair. If no seed pair has cyclic distance one or two, no rule is enabled. Therefore</p>
+<p>There are no other rules. For \(0&lt;m&lt;L\), compare the library \(K_b=\{c,b_1,\ldots,b_m\}\) with \(K_u=\{c,u_1,\ldots,u_m\}\). Both contain \(m+1\) nodes, both took \(m\) constructions to build, and both are connected to the core by valid proofs. Nevertheless,</p>
 \[
-1-(1-\rho^2)^{\lfloor N/2\rfloor}
-\le\Pr(\text{ring fills})\le\min\{1,2N\rho^2\}.
+d(K_b,G)=L-m,\qquad d(K_u,G)=L.
 \]
-<p><strong>Proof of the bounds.</strong> The lower bound uses disjoint adjacent pairs, whose seed events are independent. For the upper bound, take the union bound over the \(2N\) pairs at cyclic distance one or two.</p>
-
-<p>The ring fills with probability tending to one if \(N\rho^2\to\infty\), and to zero if \(N\rho^2\to0\). Its threshold scale is \(N^{-1/2}\). For fixed \(0&lt;\rho&lt;1\), the ring's closure fraction tends to one while the groups' fraction stays below one. Uniform step costs, arity, and every degree agree; the arrangement of dependencies changes the large-system behavior.</p>
-
-<h2 id="knowledge-cascades">A random ensemble with a discontinuous transition</h2>
-
-<p>We can also ask what happens when the dependencies are chosen randomly. Let \(0&lt;\rho&lt;1\) set the initially known fraction and \(\lambda&gt;0\) the number of rules per node. Choose \(\lfloor\rho N\rfloor\) seeds uniformly among \(N\) labels. Independently, sample \(\lfloor\lambda N\rfloor\) rules \(\{a,b\}\to c\) uniformly, with three distinct labels and with replacement. Let \(X_N=|\operatorname{cl}(K_0)|/N\) be the fraction of nodes eventually obtained. This is an ensemble of finite construction regions; derivations outside the region are omitted.</p>
-
-<p>To guess the limiting fraction \(x\), suppose each prerequisite were independently known with probability \(x\). A binary rule would then be enabled with probability \(x^2\). The number of incoming rules is approximately Poisson with mean \(\lambda\), giving probability \(e^{-\lambda x^2}\) that none is enabled. A node remains unknown if it was not seeded and no rule produces it. This suggests</p>
-\[
-\boxed{x=1-(1-\rho)e^{-\lambda x^2}.}
-\]
-<p><strong>Known theorem.</strong> The independence argument is a heuristic, but a limit theorem justifies its equation. When the smallest solution \(x\) is simple, meaning the two sides have different slopes there, \(X_N\to x\) in probability. This is the positive-closure result in <a href="https://arxiv.org/pdf/math/0505032">Moore, Istrate, Demopoulos, and Vardi, Lemma 3.1</a>. The equation can have several solutions. Iterating its right-hand side from \(x_0=\rho\) selects the smallest: the iterates increase and are bounded above by every fixed point.</p>
-
-<p>The transition follows by solving for \(\rho\):</p>
-\[
-\rho(x)=1-(1-x)e^{\lambda x^2},\qquad
-\rho'(x)=e^{\lambda x^2}[1-2\lambda x(1-x)].
-\]
-<p>For \(\lambda&lt;2\), this derivative is positive. For \(\lambda&gt;2\), the lower branch ends at a local maximum:</p>
-\[
-x_- =\frac{1-\sqrt{1-2/\lambda}}2,\qquad
-\rho_c=1-(1-x_-)e^{\lambda x_-^2}.
-\]
-<p>Increasing \(\rho\) through \(\rho_c\) removes the lower root, so the limiting closure jumps. For \(\lambda=3\), \(\rho_c\approx0.0982574\): the least root is about \(0.19994\) at \(\rho=0.098\), and \(0.93434\) at \(\rho=0.099\).</p>
+<p><strong>Proof.</strong> The only way to obtain \(G\) is to finish its chain. The first library has already completed \(m\) of those constructions; the second has completed none. Equal amounts of acquired knowledge can leave very different work for a given target.</p>
 
 <figure>
-  <a href="/assets/autoprover/knowledge-cascade.svg" aria-label="Open the closure graph at full size">
-    <img src="/assets/autoprover/knowledge-cascade.svg" width="840" height="540"
-         alt="Closure fraction versus seed fraction: random binary rules at density three have a jump near 9.83 percent seeds; disjoint groups with the same density have a smooth response."
+  <a href="/assets/autoprover/connected-libraries.svg" aria-label="Open the two connected libraries at full size">
+    <img src="/assets/autoprover/connected-libraries.svg" width="1180" height="450"
+         alt="The same two-chain graph with two different sets of four known nodes. Knowing the first three nodes of the target chain leaves one construction; knowing the other chain leaves four. Both libraries include their common core."
          loading="lazy">
   </a>
-  <figcaption>Limiting closure fractions. The dotted segment marks the jump, without assigning a limit at the discontinuous critical point. <a href="/assets/autoprover/models.py">Reproduce the calculations.</a></figcaption>
+  <figcaption>Two valid histories in the same graph, with \(L=4\) and \(m=3\). Blue nodes are known. <a href="/assets/autoprover/connected_libraries.py">Reproduce the diagram and finite checks.</a></figcaption>
 </figure>
 
-<p>How much does the final known fraction change when the initially known fraction increases? Differentiating the equation along a simple branch gives</p>
-\[
-\frac{dx}{d\rho}
-=\frac{1-x}{(1-\rho)[1-2\lambda x(1-x)]}.
-\]
-<p>This derivative diverges as the lower branch approaches its endpoint. Equal-cost local constructions can therefore exhibit both collective amplification and a singular response to additional initial knowledge.</p>
-
-<details>
-  <summary>Details of the limit theorem and its continuous endpoint</summary>
-  <p>The cited theorem uses parameters \((d_1,d_2,d_3)=(\rho,0,\lambda)\). Symmetry allows its excluded seed label to be randomized, giving the uniform seed set used here.</p>
-  <p>At \(\lambda=2\), \(\rho'(x)\) vanishes only at \(x=1/2\); the root remains unique and continuous. Its seed density is \(1-\sqrt e/2\). To extend the simple-root limit theorem there, couple nested seed sets at \(\rho_c-\varepsilon,\rho_c,\rho_c+\varepsilon\). Closure monotonicity sandwiches the middle fraction between the outer two. First take \(N\to\infty\), then \(\varepsilon\to0\). The outer limits both approach \(1/2\). At a discontinuous endpoint they differ, so this argument gives no concentration claim there. The plotted curves are large-system limits, not observations of an actual prover.</p>
+<details id="random-seed-calculation">
+  <summary>What does the four-node formula with \(\rho\) calculate?</summary>
+  <p>This is a different initial-condition model, which does not ensure a history from our fixed core. Divide nodes into groups of four; within each group, any two nodes can produce either remaining node. Now suppose each node is independently supplied as known with probability \(\rho\).</p>
+  <p>Fix one node. It is eventually known in two disjoint cases: it was supplied initially, with probability \(\rho\); or it was not, with probability \(1-\rho\), and at least two of the other three were supplied. Exactly two can be chosen in three ways, giving \(3\rho^2(1-\rho)\); all three have probability \(\rho^3\). Thus its probability of becoming known is</p>
+  \[
+  \begin{aligned}
+  x_{\mathrm{groups}}(\rho)
+  &=\rho+(1-\rho)\bigl[3\rho^2(1-\rho)+\rho^3\bigr]\\
+  &=\rho+(1-\rho)(3\rho^2-2\rho^3).
+  \end{aligned}
+  \]
+  <p>For example, \(\rho=1/2\) gives \(x_{\mathrm{groups}}=3/4\). By symmetry this is also the expected fraction known. The calculation is exact under independent supply, but it does not establish a law for libraries produced by a prover. For those, the distribution of known nodes must come from construction histories.</p>
 </details>
 
 <h2 id="percolation">Percolation and finite observations</h2>
 
-<p>The closure operation is a generalized bootstrap-percolation process: known nodes are active, and a node activates when one of its prescribed prerequisite sets is active. Its formulation as <a href="https://dmtcs.episciences.org/578">directed-hypergraph propagation</a> retains the AND condition within each rule. An infinite ambient graph is compatible with every actual exploration and every proof being finite.</p>
+<p>Percolation can also start from a fixed core: explore outward from a chosen origin along available edges. Every discovered node is then connected to that origin. Its phase transition varies the random availability of edges across models. It does not come from repeatedly deriving consequences in one fixed, fully available graph.</p>
+
+<p>Our closure operation is related to <a href="https://dmtcs.episciences.org/578">directed-hypergraph propagation</a>, with all premises of a rule required together. Relating a percolation parameter to a prover would need a model of which constructions it can discover. We have not supplied such a model.</p>
 
 <p>For comparison, ordinary bond percolation keeps each edge of a graph independently with probability \(p\). Suppose the graph \(\Gamma\) is infinite, connected, locally finite, and vertex-transitive. Fix a starting vertex \(o\), and let \(B_R\) contain the vertices within distance \(R\) of it. We compare the probability \(q_R(p)\) of an open path leaving this finite ball with the probability \(\theta(p)\) of connection to infinity:</p>
 \[
@@ -169,9 +155,32 @@ p&gt;p_c:&0\le q_R(p)-\theta(p)\le e^{-cR}.
 \]
 <p>The supercritical bound is <a href="https://arxiv.org/html/2603.03257v1">Diskin and collaborators, Theorem 1 (2026)</a>; the subcritical bound is classical. These concern complete finite balls of a specified random graph. Applying them to proof hypergraphs would require a corresponding theorem: countability and equal costs do not supply independence, symmetry, or ordinary connectivity. An arbitrary prover trace need not expose a complete ball. Sharpness also does not mean the order parameter must jump discontinuously.</p>
 
+<h2 id="magma-equations">Magma equations as a testing ground</h2>
+
+<p>A magma is a set with one binary operation \(\star\), with no laws assumed initially. An equational law is an identity required to hold for every assignment of its variables, such as associativity, \((x\star y)\star z=x\star(y\star z)\). A proof task fixes some laws \(T\) as assumptions and asks whether another equation follows in every magma satisfying \(T\).</p>
+
+<p>This gives us a controlled setting for algebraic proof search. Terms have a simple syntax, but the prover must still choose substitutions, rewrite locations, and intermediate equations. Equational reasoning is complete for these positive implication questions: every valid implication has a finite derivation using equality rules and substitution. <a href="https://arxiv.org/html/2512.07087v2#S1.SS1">The Equational Theories Project paper</a> explains this connection and why short equations can require difficult proofs.</p>
+
+<p>The <a href="https://github.com/teorth/equational_theories">project's corpus</a> already classifies all 22,028,942 non-reflexive implication questions among 4,694 laws with at most four operation occurrences, with Lean-checked proofs or refutations. This gives evaluation answers without giving us every proof route or its minimum cost. The published implication edges usually summarize whole proofs; they are not our elementary hyperedges.</p>
+
+<p>A first experiment could fix \(T\), choose known positive implications as targets, and compare provers with explicitly restricted libraries. Every added lemma must come with a derivation from the same \(T\); importing an arbitrary magma law would change the problem. Library variants can be prefixes of recorded valid runs. Measure library construction and subsequent target search separately, counting failed proposals as well as the final proof length. The project's <a href="https://teorth.github.io/equational_theories/blueprint/vampire-chapter.html">Vampire workflow</a> provides a starting point for classical automation and Lean reconstruction.</p>
+
+<p>This would test rewriting, guidance, and lemma reuse. It would not by itself establish statistical laws for mathematics generally: the experiment fixes the language and types, and positive equational proving does not test all the choices involved in developing new definitions or constructing counterexamples. Generalization would require comparisons with other domains. No prover runs for this experiment are reported here.</p>
+
+<details>
+  <summary>A finite sequence of graphs that preserves the fixed core</summary>
+  <p>Fix an elementary equational calculus. Bound term size and the available variable names to obtain finite equation sets \(V_n\), increasing to cover every equation. Keep the inference edges entirely within each set, giving nested finite hypergraphs \(\mathcal H_n\). Begin after the core, target, and full history of the starting library \(K\) all fit.</p>
+  <p>Let \(d_n(K,G)\) be the shortest construction within \(\mathcal H_n\), or infinity if there is none. Enlarging the graph preserves old routes, so</p>
+  \[
+  d_{n+1}(K,G)\le d_n(K,G).
+  \]
+  <p>If the unrestricted minimum \(d(K,G)\) is finite, an optimal proof uses finitely many equations and eventually fits inside one \(\mathcal H_n\). From that point onward, \(d_n(K,G)=d(K,G)\). This proves eventual agreement, without telling us when that point has been reached. Small finite graphs could therefore support exact comparisons with search policies.</p>
+  <p>For fixed \(K,G\), this minimum eventually stops changing. To study nontrivial scaling, we would need a growing family of targets, or a specified policy whose search effort is measured as more options become available. Whether such experiments exhibit thresholds remains a research question.</p>
+</details>
+
 <h2 id="research">What might a prover exploit?</h2>
 
-<p>The graph supplies both obstructions and opportunities: joint prerequisites, shared intermediates, dependency bottlenecks, and regions where new knowledge triggers cascades. A prover must select steps without knowing their full consequences. Humans and autoprovers nevertheless seem to have a sense of direction: we simplify a goal, introduce a construction, or choose a promising lemma before possessing the completed proof.</p>
+<p>The graph supplies joint prerequisites, shared intermediates, and dependency bottlenecks. A prover must select steps without knowing their full consequences. Humans and autoprovers nevertheless seem to have a sense of direction: we simplify a goal, introduce a construction, or choose a promising lemma before possessing the completed proof.</p>
 
 <p>The distance above gives one precise interpretation. Let \(p_t\) be the conditional probability that the next proposal decreases \(d(K_t,G)\), given the entire run so far. If \(p_t\ge\varepsilon&gt;0\) until success, then</p>
 \[
@@ -179,7 +188,7 @@ p&gt;p_c:&0\le q_R(p)-\theta(p)\le e^{-cR}.
 \]
 <p><strong>Proof.</strong> With \(T_n=\min(\tau,n)\), expected accumulated decreases are at least \(\varepsilon\mathbb E[T_n]\) and at most \(d(K_0,G)\). Let \(n\to\infty\). No independence of successive choices is needed. For uniform selection from a finite candidate set, \(p_t\) is simply its fraction of distance-decreasing moves.</p>
 
-<p>Can recognizable features of the hypergraph predict those moves? Does useful direction come from simulating short continuations, learned structural regularities, or both? Can properties measured in explored regions predict cascade thresholds elsewhere? These are research questions; the formulas above do not supply that prediction.</p>
+<p>Can recognizable features of the hypergraph predict those moves? Does useful direction come from simulating short continuations, learned structural regularities, or both? Can properties measured along valid construction histories predict the cost of reaching other targets? These are research questions; the formulas above do not supply that prediction.</p>
 
 <p>The refrigerator analogy asks for a resource law for reaching a desired state. We have specified a unit of reasoning cost and exhibited structural and statistical laws. Relating them to physical work or a mathematical notion of entropy remains to be done.</p>
 </article>
