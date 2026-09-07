@@ -11,35 +11,36 @@ tags: "#lean #math #AI #statistical-mechanics"
 
 <h2 id="setup">The hypergraph</h2>
 
+<p>Let \(V\) be the countable set of theorems, definitions, types, and intermediate constructions, including their local contexts. A rule \(P\to v\) describes one elementary way to construct a node \(v\) from <em>all</em> the premises in a set \(P\). We call such a rule a directed hyperedge because it can require several premises together. Write \(E\) for the collection of these rules. Assuming at most two premises per rule, our hypergraph is</p>
 \[
 \mathcal H=(V,E),\qquad
 E\subseteq\{(P,v):P\subseteq V,\ |P|\le2,\ v\in V\}.
 \]
-<p>The countable set \(V\) contains theorems, definitions, types, and intermediate constructions, including their local contexts. A hyperedge \(P\to v\) is one elementary way to construct \(v\) from <em>all</em> the premises in \(P\). Alternative edges into \(v\) represent alternative constructions. We fix the foundation, available operations, and step resolution; binary prerequisites and unit costs are model assumptions.</p>
+<p>Alternative edges into \(v\) represent alternative constructions. We fix the foundation, available operations, and step resolution; binary prerequisites and unit costs are model assumptions.</p>
 
-<p>A run begins with a finite library \(K_0\) and retains what it constructs:</p>
+<p>A run begins with a finite library \(K_0\) and retains what it constructs. Write \(K\) for its current library and \(K_t\) for that library after \(t\) proposals. A successful construction adds its conclusion:</p>
 \[
 K\longmapsto K\cup\{v\}
 \quad\text{when }(P,v)\in E\text{ and }P\subseteq K.
 \]
 <p>This models small proof-assistant steps. Writing a tactic inline reaches an intermediate node; naming a lemma records a construction for reuse. We assume useful constructions are retained either way. Tactics themselves can belong to the library. Choosing and proposing a step costs one unit; checking costs are neglected. Failed proposals also cost one unit and leave \(K\) unchanged. The full hypergraph is an idealization, not a map supplied to the prover.</p>
 
-<p>For example, at projection/constructor resolution, a hypothesis \(h:P\land Q\) gives the constructions</p>
+<p>For example, from a hypothesis \(h:A\land B\), we can extract a proof of \(A\), extract a proof of \(B\), and combine them to prove \(B\land A\). Counting each extraction and combination as one step gives</p>
 \[
-h\to p:P,\qquad h\to q:Q,\qquad
-\{p,q\}\to g:Q\land P.
+h\to a:A,\qquad h\to b:B,\qquad
+\{a,b\}\to g:B\land A.
 \]
-<p>The two projections can be taken in either order, and their results remain available.</p>
+<p>The two extractions can be taken in either order, and their results remain available.</p>
 
 <h2 id="closure">Closure and combining libraries</h2>
 
-<p>For any supplied set \(K\), define</p>
+<p>Starting from a library \(K\), let \(F(K)\) add every construction whose premises are already known. Repeating this operation gives everything obtainable from \(K\), its <em>closure</em>. Writing \(F^n\) for \(n\) iterations, with \(F^0(K)=K\), we have</p>
 \[
 F(K)=K\cup\{v:\exists(P,v)\in E,\ P\subseteq K\},
 \qquad
 \operatorname{cl}(K)=\bigcup_{n\ge0}F^n(K).
 \]
-<p>Here \(F\) applies all enabled rules in parallel; its iteration count is not serial proof cost. Closure has the properties</p>
+<p>These parallel iterations do not measure serial proof cost. Closure contains the starting library, respects inclusion, and adds nothing further when applied a second time:</p>
 \[
 \begin{gathered}
 K\subseteq\operatorname{cl}(K),\qquad
@@ -66,7 +67,7 @@ v\in\operatorname{cl}(K)
 
 <h2 id="distance">Construction distance</h2>
 
-<p>For a target \(G\in\operatorname{cl}(K_0)\) and a library \(K\supseteq K_0\), let</p>
+<p>Discoveries leave deductive closure unchanged, but can shorten the remaining construction of a target. Fix a target \(G\) derivable from the initial library \(K_0\). For a current library \(K\supseteq K_0\), define its construction distance \(d(K,G)\) as the fewest further steps needed to obtain \(G\):</p>
 \[
 d(K,G)=\min\{m:G\text{ can be added to }K
 \text{ in }m\text{ elementary steps}\}.
@@ -78,7 +79,7 @@ d(K,G)=\min\{m:G\text{ can be added to }K
 \]
 <p><strong>Proof.</strong> Extra knowledge can be ignored, so it cannot increase the minimum. Conversely, prepend the step \(K\to K'\) to a shortest derivation from \(K'\): \(d(K,G)\le1+d(K',G)\).</p>
 
-<p>Thus unit steps partition into those that decrease this distance by one and those that leave it unchanged. Let \(\tau=\inf\{t:G\in K_t\}\). A successful run satisfies the exact identity</p>
+<p>Thus unit steps partition into those that decrease this distance by one and those that leave it unchanged. Let \(\tau\) count the proposals up to the first proof of \(G\), so \(\tau=\inf\{t:G\in K_t\}\). A successful run satisfies the exact identity</p>
 \[
 \tau=d(K_0,G)+\#\{\text{steps that leave }d\text{ unchanged}\}.
 \]
@@ -88,12 +89,11 @@ d(K,G)=\min\{m:G\text{ can be added to }K
 
 <h2 id="density-is-not-enough">Equal degrees, different growth</h2>
 
-<p>Take \(N\ge8\), divisible by four, and seed each node independently with probability \(\rho\). The following two hypergraphs both have three incoming binary rules and six premise incidences at every node.</p>
+<p>How much does the arrangement of dependencies matter? Take \(N\ge8\) nodes, with \(N\) divisible by four. Include each node in the initial library independently with probability \(\rho\); call these initially known nodes <em>seeds</em>. In each of the following hypergraphs, every node has three incoming binary rules and appears as a premise in six rules.</p>
 
-<p><strong>Groups.</strong> Partition the nodes into groups of four. For each head, any pair of the other three can produce it. A group fills exactly when it starts with at least two seeds. The probability that a particular node enters the closure is</p>
+<p><strong>Groups.</strong> Partition the nodes into groups of four. For each node, any pair of the other three can produce it. A group fills exactly when it starts with at least two seeds. A particular node therefore enters the closure if it is a seed itself, or if at least two of its three neighbors are seeds. Its probability of doing so is</p>
 \[
 x_{\mathrm{groups}}(\rho)
-=\rho+(1-\rho)\Pr(\operatorname{Bin}(3,\rho)\ge2)
 =\rho+(1-\rho)(3\rho^2-2\rho^3).
 \]
 <p>Independent groups make the closure fraction converge in probability to this smooth polynomial.</p>
@@ -109,13 +109,13 @@ x_{\mathrm{groups}}(\rho)
 
 <h2 id="knowledge-cascades">A random ensemble with a discontinuous transition</h2>
 
-<p>Fix \(0&lt;\rho&lt;1\) and \(\lambda&gt;0\). Choose \(\lfloor\rho N\rfloor\) seeds uniformly among \(N\) labels, and sample \(\lfloor\lambda N\rfloor\) rules \(\{a,b\}\to c\) uniformly, with three distinct labels and with replacement. Let \(X_N=|\operatorname{cl}(K_0)|/N\). This is an ensemble of finite construction regions; derivations outside the region are omitted.</p>
+<p>We can also ask what happens when the dependencies are chosen randomly. Let \(0&lt;\rho&lt;1\) set the initially known fraction and \(\lambda&gt;0\) the number of rules per node. Choose \(\lfloor\rho N\rfloor\) seeds uniformly among \(N\) labels. Independently, sample \(\lfloor\lambda N\rfloor\) rules \(\{a,b\}\to c\) uniformly, with three distinct labels and with replacement. Let \(X_N=|\operatorname{cl}(K_0)|/N\) be the fraction of nodes eventually obtained. This is an ensemble of finite construction regions; derivations outside the region are omitted.</p>
 
-<p>A Poisson approximation gives mean \(\lambda x^2\) enabled incoming rules at closure density \(x\), suggesting</p>
+<p>To guess the limiting fraction \(x\), suppose each prerequisite were independently known with probability \(x\). A binary rule would then be enabled with probability \(x^2\). The number of incoming rules is approximately Poisson with mean \(\lambda\), giving probability \(e^{-\lambda x^2}\) that none is enabled. A node remains unknown if it was not seeded and no rule produces it. This suggests</p>
 \[
 \boxed{x=1-(1-\rho)e^{-\lambda x^2}.}
 \]
-<p><strong>Known theorem.</strong> When the least root is simple, \(X_N\to x\) in probability. This is the positive-closure result in <a href="https://arxiv.org/pdf/math/0505032">Moore, Istrate, Demopoulos, and Vardi, Lemma 3.1</a>, with parameters \((d_1,d_2,d_3)=(\rho,0,\lambda)\). Symmetry allows their excluded seed label to be randomized, giving the uniform seed set here. Iteration from \(x_0=\rho\) selects the least fixed point: the iterates increase and are bounded above by every fixed point.</p>
+<p><strong>Known theorem.</strong> The independence argument is a heuristic, but a limit theorem justifies its equation. When the smallest solution \(x\) is simple, meaning the two sides have different slopes there, \(X_N\to x\) in probability. This is the positive-closure result in <a href="https://arxiv.org/pdf/math/0505032">Moore, Istrate, Demopoulos, and Vardi, Lemma 3.1</a>. The equation can have several solutions. Iterating its right-hand side from \(x_0=\rho\) selects the smallest: the iterates increase and are bounded above by every fixed point.</p>
 
 <p>The transition follows by solving for \(\rho\):</p>
 \[
@@ -138,15 +138,16 @@ x_- =\frac{1-\sqrt{1-2/\lambda}}2,\qquad
   <figcaption>Limiting closure fractions. The dotted segment marks the jump, without assigning a limit at the discontinuous critical point. <a href="/assets/autoprover/models.py">Reproduce the calculations.</a></figcaption>
 </figure>
 
-<p>On a simple branch, implicit differentiation also gives a response coefficient:</p>
+<p>How much does the final known fraction change when the initially known fraction increases? Differentiating the equation along a simple branch gives</p>
 \[
 \frac{dx}{d\rho}
 =\frac{1-x}{(1-\rho)[1-2\lambda x(1-x)]}.
 \]
-<p>It diverges as the lower branch approaches its endpoint. Equal-cost local constructions can therefore exhibit both collective amplification and a singular response to additional initial knowledge.</p>
+<p>This derivative diverges as the lower branch approaches its endpoint. Equal-cost local constructions can therefore exhibit both collective amplification and a singular response to additional initial knowledge.</p>
 
 <details>
-  <summary>The continuous endpoint and finite-system qualification</summary>
+  <summary>Details of the limit theorem and its continuous endpoint</summary>
+  <p>The cited theorem uses parameters \((d_1,d_2,d_3)=(\rho,0,\lambda)\). Symmetry allows its excluded seed label to be randomized, giving the uniform seed set used here.</p>
   <p>At \(\lambda=2\), \(\rho'(x)\) vanishes only at \(x=1/2\); the root remains unique and continuous. Its seed density is \(1-\sqrt e/2\). To extend the simple-root limit theorem there, couple nested seed sets at \(\rho_c-\varepsilon,\rho_c,\rho_c+\varepsilon\). Closure monotonicity sandwiches the middle fraction between the outer two. First take \(N\to\infty\), then \(\varepsilon\to0\). The outer limits both approach \(1/2\). At a discontinuous endpoint they differ, so this argument gives no concentration claim there. The plotted curves are large-system limits, not observations of an actual prover.</p>
 </details>
 
@@ -154,12 +155,12 @@ x_- =\frac{1-\sqrt{1-2/\lambda}}2,\qquad
 
 <p>The closure operation is a generalized bootstrap-percolation process: known nodes are active, and a node activates when one of its prescribed prerequisite sets is active. Its formulation as <a href="https://dmtcs.episciences.org/578">directed-hypergraph propagation</a> retains the AND condition within each rule. An infinite ambient graph is compatible with every actual exploration and every proof being finite.</p>
 
-<p>For comparison, ordinary independent bond percolation on an infinite connected, locally finite, vertex-transitive graph \(\Gamma\) has a precise finite-to-infinite relation. Set</p>
+<p>For comparison, ordinary bond percolation keeps each edge of a graph independently with probability \(p\). Suppose the graph \(\Gamma\) is infinite, connected, locally finite, and vertex-transitive. Fix a starting vertex \(o\), and let \(B_R\) contain the vertices within distance \(R\) of it. We compare the probability \(q_R(p)\) of an open path leaving this finite ball with the probability \(\theta(p)\) of connection to infinity:</p>
 \[
 q_R(p)=\Pr_p(o\text{ connects to the boundary of }B_R),
 \qquad \theta(p)=\Pr_p(o\leftrightarrow\infty).
 \]
-<p>Here \(B_R\) is the radius-\(R\) ball around \(o\), and reaching its boundary means crossing an edge leaving it. Write \(p_c=\inf\{p:\theta(p)&gt;0\}\). The sharpness bounds hold with some \(c=c(p,\Gamma)&gt;0\):</p>
+<p>Reaching the boundary means crossing an edge leaving the ball. The critical probability \(p_c=\inf\{p:\theta(p)&gt;0\}\) marks the onset of a positive chance of connection to infinity. The sharpness bounds hold with some \(c=c(p,\Gamma)&gt;0\):</p>
 \[
 \begin{array}{ll}
 p&lt;p_c:&q_R(p)\le e^{-cR},\\
