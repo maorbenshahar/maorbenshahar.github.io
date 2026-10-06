@@ -4,3 +4,9 @@ layout: default
 <h1>{{ page.title }}</h1>
 <p class="date">{{ page.date | date: "%Y-%m-%d" }}</p>
 {{ content }}
+
+<section class="post-citation" aria-label="Citation">
+  <h2>Cite this post</h2>
+  <p>Maor Ben Shahar. &ldquo;{{ page.title | escape }}.&rdquo; {{ page.date | date: "%B %-d, %Y" }}.
+    <a href="{{ page.url | absolute_url }}">{{ page.url | absolute_url }}</a></p>
+</section>

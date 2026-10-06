@@ -13,3 +13,10 @@ vendor/
 
 # local deploy helper (not part of the site)
 /deploy.sh
+
+# Unpublished material belongs in the separate drafts repository.
+/drafts/
+/_drafts/
+/assets/autoprover/
+/_posts/*auto-fridge*
+/_posts/*what-is-is*

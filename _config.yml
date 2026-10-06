@@ -1,4 +1,5 @@
 title: Maor Ben Shahar
+url: "https://maorbenshahar.github.io"
 
 # Posts live in _posts/ ; everything else (index, blog, research) are plain pages.
 # This permalink keeps post URLs identical to before: /posts/using_lean.html
@@ -8,3 +9,6 @@ exclude:
   - README.md
   - Gemfile
   - Gemfile.lock
+  - drafts
+  - _drafts
+  - assets/autoprover
